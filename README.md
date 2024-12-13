@@ -1,1 +1,1 @@
-# MICP-localization
+# Visual Odometry
