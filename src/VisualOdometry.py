@@ -2,11 +2,13 @@ import utils as u
 import numpy as np
 
 class VisualOdometry():
-    def __init__(self, max_iter=10, dataset_path='path', camera_path='../data/camera.dat', traj_path='../data/trajectoy.dat'):
+    def __init__(self, max_iter=10, camera_path='../data/camera.dat', traj_path='../data/trajectoy.dat'):
         self.max_iter = max_iter
-        self.data = dataset_path
         self.camera_info = u.extract_camera_data(camera_path)
         self.gt = u.read_traj(traj_path)
+        self.poses_camera = []
+        self.R = None
+        self.t = None
 
     def run(self):
         #Inizialization (has features of the first and second image)
@@ -26,13 +28,14 @@ class VisualOdometry():
         #Compute the essential matrix and decompose in rotation matrix and translation vector
         K = self.camera_info['camera_matrix']
         self.R, self.t = u.compute_pose(K,points1,points2)
+        self.poses_camera.append((self.R,self.t))
 
         print(f"Rotation:\n {self.R}")
         print(f"translation:\n {self.t}")
         print("=============1=================")
         prev_features = second_features
 
-        #Repeat the previous steps for max_iter
+        #Repeat the previous steps for [2,max_iter]
         for i in range(2,self.max_iter):
             curr_features = u.extract_measurements(u.generate_path(i))
             curr_assoc = u.data_association(prev_features['Appearance_Features'],
@@ -46,16 +49,17 @@ class VisualOdometry():
             #compute scale
             scale = u.getAbsoluteScale(self.gt,i)
 
-            #rescale
+            #rescale of R and t 
             self.t = self.t + scale * (self.R * t)
             self.R = R * self.R
-
+            self.poses_camera.append((self.R, self.t))
+            
             print(f"Rotation: \n {self.R}")
             print(f"translation: \n {self.t}")
             print(f"============{i}==================")
 
+            #Every 10 iterations apply P-ICP
+            if(i % 10 == 0):
+                pass
 
             prev_features = curr_features
-            
-            #Every N iterations apply P-ICP
-        pass
