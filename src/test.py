@@ -2,6 +2,7 @@ import pandas as pd
 import re
 import numpy as np
 from scipy.spatial.distance import euclidean
+import cv2
 
 def data_association(points1, points2):
     associations = []
@@ -89,9 +90,6 @@ def extract_other_info(file_path):
 def generate_path(id):
     return f"../data/meas-{id:05d}.dat"
 
-import re
-import numpy as np
-
 def extract_camera_data(file_path):
     camera_matrix = []
     cam_transform = []
@@ -146,6 +144,10 @@ def extract_camera_data(file_path):
         "height": height
     }
 
+def compute_pose(K, points1, points2):
+    E, mask = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, prob=0.999, threshold=1.0)
+    _, R, t, mask = cv2.recoverPose(E, points1, points2, K)
+    return R, t
 
 if __name__ == "__main__":
     file_path = generate_path(0)

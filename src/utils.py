@@ -2,6 +2,7 @@ import pandas as pd
 import re
 from scipy.spatial.distance import euclidean
 import numpy as np
+import cv2
 
 def extract_measurements(file_path):
     point_data = []
@@ -139,3 +140,31 @@ def extract_camera_data(file_path):
         "width": width,
         "height": height
     }
+
+def compute_pose(K, points1, points2):
+    E, _ = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, prob=0.999, threshold=1.0)
+    _, R, t, _ = cv2.recoverPose(E, points1, points2, K)
+    return R, t
+
+def read_traj(trajectory_path):
+    ground_truths = []
+
+    with open(trajectory_path, 'r') as file:
+        for line in file:
+            values = line.strip().split()
+            if len(values) >= 7:
+                x, y, z = map(float, values[4:7])
+                ground_truths.append((x, y, z))
+    
+    return ground_truths
+
+
+def getAbsoluteScale(gt, frame_id):
+    if frame_id < 2 or frame_id >= len(gt):
+        return 1.0  #Default 
+
+    x_prev, y_prev, z_prev = gt[frame_id - 1]
+    x_curr, y_curr, z_curr = gt[frame_id]
+
+    scale = np.sqrt((x_curr - x_prev) ** 2 + (y_curr - y_prev) ** 2 + (z_curr - z_prev) ** 2)
+    return scale
