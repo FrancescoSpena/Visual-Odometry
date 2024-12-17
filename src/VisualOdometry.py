@@ -2,8 +2,11 @@ import utils as u
 import numpy as np
 
 class VisualOdometry():
-    def __init__(self, max_iter=10, camera_path='../data/camera.dat', traj_path='../data/trajectoy.dat'):
-        self.max_iter = max_iter
+    def __init__(self, max_iter=120, camera_path='../data/camera.dat', traj_path='../data/trajectoy.dat'):
+        if max_iter > 120:
+            self.max_iter = 120
+        else:
+            self.max_iter = max_iter
         self.camera_info = u.extract_camera_data(camera_path)
         self.gt = u.read_traj(traj_path)
         self.poses_camera = []
@@ -33,6 +36,10 @@ class VisualOdometry():
         print(f"Rotation:\n {self.R}")
         print(f"translation:\n {self.t}")
         print("=============1=================")
+
+        all_2d_points = [points1, points2]
+        all_3d_points = u.triangulate_points(K, np.eye(3), np.zeros(3), self.R, self.t, points1, points2)
+
         prev_features = second_features
 
         #Repeat the previous steps for [2,max_iter]
@@ -50,16 +57,22 @@ class VisualOdometry():
             scale = u.getAbsoluteScale(self.gt,i)
 
             #rescale of R and t 
-            self.t = self.t + scale * (self.R * t)
-            self.R = R * self.R
+            self.t = self.t + scale * (self.R @ t)
+            self.R = R @ self.R
             self.poses_camera.append((self.R, self.t))
             
             print(f"Rotation: \n {self.R}")
             print(f"translation: \n {self.t}")
             print(f"============{i}==================")
 
+            min_points = min(len(all_2d_points[-1]), len(all_3d_points))
+            all_2d_points = [points[:min_points] for points in all_2d_points]
+            all_3d_points = all_3d_points[:min_points]
+            
             #Every 10 iterations apply P-ICP
-            if(i % 10 == 0):
-                pass
+            if i % 10 == 0:
+                print("Appling BA...")
+                self.poses_camera, _ = u.bundle_adjustment(K, all_2d_points, all_3d_points, self.poses_camera)
+
 
             prev_features = curr_features

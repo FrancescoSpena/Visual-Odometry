@@ -3,6 +3,7 @@ import re
 from scipy.spatial.distance import euclidean
 import numpy as np
 import cv2
+from scipy.optimize import least_squares
 
 def extract_measurements(file_path):
     point_data = []
@@ -168,3 +169,75 @@ def getAbsoluteScale(gt, frame_id):
 
     scale = np.sqrt((x_curr - x_prev) ** 2 + (y_curr - y_prev) ** 2 + (z_curr - z_prev) ** 2)
     return scale
+
+
+def bundle_adjustment(camera_matrix, points_2d_list, points_3d_list, poses):
+    def project(points_3d, pose, K):
+        R, t = pose
+        projected_points = []
+
+        for point in points_3d:
+            point_cam = R @ point + t
+            point_proj = K @ point_cam
+            point_proj /= point_proj[2]
+            projected_points.append(point_proj[:2])
+
+        return np.array(projected_points)
+
+    def residuals(params, n_poses, n_points, points_2d_list, camera_matrix):
+        poses = []
+        idx = 0
+
+        for _ in range(n_poses):
+            rvec = params[idx:idx + 3]
+            tvec = params[idx + 3:idx + 6]
+            R, _ = cv2.Rodrigues(rvec)
+            poses.append((R, tvec))
+            idx += 6
+
+        points_3d = params[idx:].reshape((n_points, 3))
+
+        error = []
+        for i, (points_2d, pose) in enumerate(zip(points_2d_list, poses)):
+            projected = project(points_3d, pose, camera_matrix)
+            error.extend((projected - points_2d).ravel())
+
+        return np.array(error)
+
+    n_poses = len(poses)
+    n_points = len(points_3d_list)
+
+    params = []
+    for R, t in poses:
+        rvec, _ = cv2.Rodrigues(R)
+        params.extend(rvec.ravel())
+        params.extend(t.ravel())
+    
+    params.extend(np.array(points_3d_list).ravel())
+    result = least_squares(residuals, params, ftol=1e-4, args=(n_poses, n_points, points_2d_list, camera_matrix))
+
+    optimized_params = result.x
+    idx = 0
+    optimized_poses = []
+
+    for _ in range(n_poses):
+        rvec = optimized_params[idx:idx + 3]
+        tvec = optimized_params[idx + 3:idx + 6]
+        R, _ = cv2.Rodrigues(rvec)
+        optimized_poses.append((R, tvec))
+        idx += 6
+
+    optimized_points_3d = optimized_params[idx:].reshape((n_points, 3))
+
+    return optimized_poses, optimized_points_3d
+
+def triangulate_points(K, R1, t1, R2, t2, points1, points2):
+    P1 = K @ np.hstack((R1, t1.reshape(-1, 1)))
+    P2 = K @ np.hstack((R2, t2.reshape(-1, 1)))
+    
+    points1_h = np.array(points1).T
+    points2_h = np.array(points2).T
+    points_4d = cv2.triangulatePoints(P1, P2, points1_h, points2_h)
+    points_3d = (points_4d[:3] / points_4d[3]).T
+    
+    return points_3d
