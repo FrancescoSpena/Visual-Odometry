@@ -1,9 +1,10 @@
 from VisualOdometry import VisualOdometry
 import numpy as np
 import utils as u
+import rerun as rr
+from scipy.spatial.transform import Rotation
 
-if __name__ == '__main__':
-    vo = VisualOdometry()
+def check_poses(vo, iter):
     gt = vo.gt
     #homogeneous transformation from i to i+1
     T_prev = None
@@ -11,9 +12,7 @@ if __name__ == '__main__':
     T_gt_prev = None
     T_gt_curr = None
 
-    R = None
-    t = None
-    for i in range(0,10):
+    for i in range(0,iter):
         if(i == 0):
             T_prev = vo.run(i)
             T_curr = T_prev
@@ -39,3 +38,13 @@ if __name__ == '__main__':
 
             T_prev = T_curr
             T_gt_prev = T_gt_curr
+
+
+def check_map(vo, iter):
+    pass
+
+
+if __name__ == '__main__':
+    vo = VisualOdometry()
+    check_map(vo,20)
+    

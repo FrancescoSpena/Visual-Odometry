@@ -2,12 +2,7 @@ import utils as u
 import numpy as np
 
 class VisualOdometry():
-    def __init__(self, max_iter=2, camera_path='../data/camera.dat', traj_path='../data/trajectoy.dat'):
-        if max_iter > 120:
-            self.max_iter = 120
-        else:
-            self.max_iter = max_iter
-        
+    def __init__(self, camera_path='../data/camera.dat', traj_path='../data/trajectoy.dat'):
         self.camera_info = u.extract_camera_data(camera_path)
         self.gt = u.read_traj(traj_path)
         self.poses_camera = []
