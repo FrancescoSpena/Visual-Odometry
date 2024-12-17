@@ -161,7 +161,7 @@ def read_traj(trajectory_path):
 
 
 def getAbsoluteScale(gt, frame_id):
-    if frame_id < 2 or frame_id >= len(gt):
+    if frame_id >= len(gt):
         return 1.0  #Default 
 
     x_prev, y_prev, z_prev = gt[frame_id - 1]
@@ -241,3 +241,15 @@ def triangulate_points(K, R1, t1, R2, t2, points1, points2):
     points_3d = (points_4d[:3] / points_4d[3]).T
     
     return points_3d
+
+def m2T(R, t):
+    t = t.reshape(3,1)
+    T = np.eye(4)
+    T[:3, :3] = R 
+    T[:3, 3] = t.ravel()
+    return T
+
+def gt2T(gt):
+    T = np.eye(4)
+    T[:3, 3] = gt 
+    return T
