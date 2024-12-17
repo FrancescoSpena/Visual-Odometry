@@ -59,7 +59,7 @@ def visualize_trajectories(vo, iter):
     pass
 
 if __name__ == '__main__':
-    iter = 40
+    iter = 50
     vo = VisualOdometry()
     ratio = check_poses(vo,iter)
     rmse = check_map(vo,iter,ratio)
