@@ -231,7 +231,7 @@ def bundle_adjustment(camera_matrix, points_2d_list, points_3d_list, poses):
 
     return optimized_poses, optimized_points_3d
 
-def triangulate_points(K, R1, t1, R2, t2, points1, points2):
+def triangulate_points(K, R1, t1, R2, t2, points1, points2, z_near=None, z_far=None):
     P1 = K @ np.hstack((R1, t1.reshape(-1, 1)))
     P2 = K @ np.hstack((R2, t2.reshape(-1, 1)))
     
@@ -239,8 +239,10 @@ def triangulate_points(K, R1, t1, R2, t2, points1, points2):
     points2_h = np.array(points2).T
     points_4d = cv2.triangulatePoints(P1, P2, points1_h, points2_h)
     points_3d = (points_4d[:3] / points_4d[3]).T
+
+    mask = (points_3d[:, 2] > z_near) & (points_3d[:, 2] < z_far)
     
-    return points_3d
+    return points_3d[mask]
 
 def m2T(R, t):
     t = t.reshape(3,1)

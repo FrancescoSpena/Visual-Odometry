@@ -10,6 +10,7 @@ class VisualOdometry():
         self.t = None
         self.idx = 0
 
+    #Return a transformation between frame i and i+1
     def run(self, idx):
         self.idx = idx
         if(idx == 0): 
@@ -32,7 +33,10 @@ class VisualOdometry():
             self.poses_camera.append((self.R,self.t))
 
             self.all_2d_points = [points1, points2]
-            self.all_3d_points = u.triangulate_points(self.K, np.eye(3), np.zeros(3), self.R, self.t, points1, points2)
+            self.all_3d_points = u.triangulate_points(self.K, np.eye(3), np.zeros(3), 
+                                                      self.R, self.t, points1, points2, 
+                                                      z_near=self.camera_info['z_near'],
+                                                      z_far=self.camera_info['z_far'])
             self.prev_features = second_features
             return u.m2T(self.R, self.t)
 
@@ -58,8 +62,8 @@ class VisualOdometry():
             self.all_2d_points = [points[:min_points] for points in self.all_2d_points]
             self.all_3d_points = self.all_3d_points[:min_points]
 
-            if self.idx % 10 == 0:
-                print("Appling BA...")
+            if self.idx % 30 == 0:
+                print(f"idx = {self.idx} - Appling BA...")
                 self.poses_camera, _ = u.bundle_adjustment(self.K, self.all_2d_points, self.all_3d_points, self.poses_camera)
 
 
