@@ -38,7 +38,6 @@ def extract_measurements(file_path):
         'Appearance_Features': df_points['Appearance_Features'].tolist()
     }
 
-
 def extract_other_info(file_path):
     sequences = []
     ground_truths = []
@@ -70,11 +69,6 @@ def extract_other_info(file_path):
 
 def generate_path(id):
     return f"../data/meas-{id:05d}.dat"
-
-
-def data_association(points1, points2, max_distance=0.8):
-    pass
-
 
 def extract_camera_data(file_path):
     camera_matrix = []
@@ -130,9 +124,6 @@ def extract_camera_data(file_path):
         "height": height
     }
 
-def compute_pose(K, points1, points2):
-    pass
-
 def read_traj(trajectory_path):
     ground_truths = []
 
@@ -145,22 +136,6 @@ def read_traj(trajectory_path):
     
     return ground_truths
 
-
-def bundle_adjustment(camera_matrix, points_2d_list, points_3d_list, poses):
-    pass
-
-def triangulate_points(K, R1, t1, R2, t2, points1, points2):
-    P1 = K @ np.hstack((R1, t1.reshape(-1, 1)))
-    P2 = K @ np.hstack((R2, t2.reshape(-1, 1)))
-    
-    points1_h = np.array(points1).T
-    points2_h = np.array(points2).T
-    points_4d = cv2.triangulatePoints(P1, P2, points1_h, points2_h)
-    points_3d = (points_4d[:3] / points_4d[3]).T
-
-    return points_3d
-
-
 def m2T(R, t):
     t = t.reshape(3,1)
     T = np.eye(4)
@@ -172,3 +147,101 @@ def gt2T(gt):
     T = np.eye(4)
     T[:3, 3] = gt 
     return T
+
+def data_association(first_data, second_data):
+    id_map = dict(zip(first_data['Point_IDs'], first_data['Actual_IDs']))
+    
+    associations = []
+    seen = set()  
+    
+    for i, point_id in enumerate(second_data['Point_IDs']):
+        actual_id_second = second_data['Actual_IDs'][i]
+        
+        if point_id in id_map and id_map[point_id] == actual_id_second:
+            key = (point_id, actual_id_second)  # Chiave per identificare duplicati
+            
+            if key not in seen:
+                associations.append({
+                    'Point_ID_First': point_id,
+                    'Point_ID_Second': point_id,
+                    'Actual_ID': actual_id_second,
+                    'Image_X_First': first_data['Image_X'][first_data['Point_IDs'].index(point_id)],
+                    'Image_Y_First': first_data['Image_Y'][first_data['Point_IDs'].index(point_id)],
+                    'Image_X_Second': second_data['Image_X'][i],
+                    'Image_Y_Second': second_data['Image_Y'][i],
+                    'Appearance_First': first_data['Appearance_Features'][first_data['Point_IDs'].index(point_id)],
+                    'Appearance_Second': second_data['Appearance_Features'][i],
+                })
+                seen.add(key)  
+    
+    return associations
+
+def filter_points(points, image_width, image_height):
+    return np.array([
+        (x, y) for x, y in points if 0 <= x < image_width and 0 <= y < image_height
+    ])
+
+def triangulate_points(K, R1, t1, R2, t2, points1, points2):
+    pass
+
+def compute_pose(points1, points2, K):
+    """
+    Compute pose
+    """
+
+    print(f"points1: {points1}")
+    print(f"points2: {points2}")
+    print("===============")
+
+    # Assicurati che i punti siano di tipo float32
+    points1 = points1.astype(np.float32)
+    points2 = points2.astype(np.float32)
+
+    # Calcolo dell'Essential Matrix
+    E, mask = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, prob=0.999, threshold=1.0)
+
+    if E is None or E.shape[1] != 3:
+        raise ValueError(f"E not valid: {E.shape if E is not None else 'None'}")
+
+    if E.shape[0] > 3:
+        E = E[:3, :]
+
+    points1_filtered = points1[mask.ravel() == 1]
+    points2_filtered = points2[mask.ravel() == 1]
+
+    if len(points1_filtered) < 5:
+        raise ValueError("No suff point after RANSAC.")
+
+    R1, R2, t = cv2.decomposeEssentialMat(E)
+
+    solutions = [
+        (R1, t),
+        (R1, -t),
+        (R2, t),
+        (R2, -t)
+    ]
+
+    def is_correct_solution(R, t, K, points1, points2):
+        P1 = np.dot(K, np.hstack((np.eye(3), np.zeros((3, 1)))))  
+        P2 = np.dot(K, np.hstack((R, t.reshape(3, 1))))           
+
+        points_4d = cv2.triangulatePoints(P1, P2, points1.T, points2.T)
+        points_3d = points_4d[:3] / points_4d[3]
+
+        in_front1 = points_3d[2] > 0
+        in_front2 = (np.dot(R, points_3d) + t.reshape(3, 1))[2] > 0
+
+        return np.all(in_front1) and np.all(in_front2)
+
+    for R, t in solutions:
+        if is_correct_solution(R, t, K, points1_filtered, points2_filtered):
+            return R, t
+
+    print("No solution. Identity and zero (fallback).")
+    return np.eye(3), np.zeros((3, 1))
+
+def bundle_adjustment(camera_matrix, points_2d_list, points_3d_list, poses):
+    pass
+
+
+
