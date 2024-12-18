@@ -21,7 +21,7 @@ def main():
     rmse = compute_rmse(est_positions, gt_positions)
     print(f"RMSE tra le pose stimate scalate e la ground truth: {rmse:.4f}")
 
-    #plot_trajectories(est_positions, gt_positions)
+    plot_trajectories(est_positions, gt_positions)
 
 def compute_scale(est_positions, gt_positions):
     """
@@ -57,21 +57,20 @@ def plot_trajectories(est_positions, gt_positions):
     rr.log("estimated_trajectory", rr.Points3D(est_positions, colors=(255, 0, 0), radii=0.02))
     rr.log("ground_truth_trajectory", rr.Points3D(gt_positions, colors=(0, 255, 0), radii=0.02))
 
-    for i, pos in enumerate(est_positions):
-        rr.log(f"estimated_trajectory/pose_{i}", rr.Points3D([pos], colors=(255, 0, 0), labels=[f"Est {i}"]))
+    # for i, pos in enumerate(est_positions):
+    #     rr.log(f"estimated_trajectory/pose_{i}", rr.Points3D([pos], colors=(255, 0, 0), labels=[f"Est {i}"]))
 
-    for i, pos in enumerate(gt_positions):
-        rr.log(f"ground_truth_trajectory/pose_{i}", rr.Points3D([pos], colors=(0, 255, 0), labels=[f"GT {i}"]))
+    # for i, pos in enumerate(gt_positions):
+    #     rr.log(f"ground_truth_trajectory/pose_{i}", rr.Points3D([pos], colors=(0, 255, 0), labels=[f"GT {i}"]))
 
 
 if __name__ == "__main__":
-    v = vo.VisualOdometry()
+    #main()
     
+    v = vo.VisualOdometry()
     T_abs = np.eye(4)
-    for i in range(20):
-        #print(f"T_abs:\n {T_abs}")
+    for i in range(120):
+        print(f"T_abs:\n {T_abs}")
         T_abs = T_abs @ v.run(i)
 
     
-    
-    print(f"T_abs:\n {T_abs}")

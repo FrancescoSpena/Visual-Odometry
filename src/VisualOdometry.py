@@ -32,25 +32,19 @@ class VisualOdometry():
         second_data = u.extract_measurements(u.generate_path(idx+1))
             
         #data association
-        assoc = u.data_association(first_data, second_data)
+        assoc1, assoc2 = u.data_association(first_data,
+                                   second_data)
 
-        print(f"assoc: {len(assoc)}")
-
-        points1 = np.array([
-            (assoc_item['Image_X_First'], assoc_item['Image_Y_First'])
-            for assoc_item in assoc
-        ])
-
-        points2 = np.array([
-            (assoc_item['Image_X_Second'], assoc_item['Image_Y_Second'])
-            for assoc_item in assoc
-        ])
-
-        self.R, self.t = u.compute_pose(points1,
-                                        points2,
-                                        self.K,
-                                        self.z_near,
-                                        self.z_far)
+        points1, points2 = u.extract_points(first_data,assoc1), u.extract_points(second_data,assoc2)
+        
+        res = u.compute_pose(points1,
+                             points2,
+                             self.K,
+                             self.z_near,
+                             self.z_far)
+        if res is not None:
+            self.R, self.t = res
             
+        self.poses_camera.append((self.R,self.t))
         return u.m2T(self.R, self.t)
         

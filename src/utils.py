@@ -148,33 +148,43 @@ def gt2T(gt):
     T[:3, 3] = gt 
     return T
 
-def data_association(first_data, second_data):
-    id_map = dict(zip(first_data['Point_IDs'], first_data['Actual_IDs']))
+def calculate_threshold(z_near, z_far, width, height):
+    depth_range = z_far - z_near
+    max_dimension = max(width, height)
+    threshold = depth_range / max_dimension
+
+    return threshold
+
+
+def data_association(dict1, dict2):
+    points1 = []
+    points2 = []
     
-    associations = []
-    seen = set()  
+    actual_ids_1 = dict1['Actual_IDs']
+    point_ids_1 = dict1['Point_IDs']
+
+    actual_ids_2 = dict2['Actual_IDs']
+    point_ids_2 = dict2['Point_IDs']
+
+    id_to_index_2 = {actual_id: idx for idx, actual_id in enumerate(actual_ids_2)}
     
-    for i, point_id in enumerate(second_data['Point_IDs']):
-        actual_id_second = second_data['Actual_IDs'][i]
-        
-        if point_id in id_map and id_map[point_id] == actual_id_second:
-            key = (point_id, actual_id_second)  
-            
-            if key not in seen:
-                associations.append({
-                    'Point_ID_First': point_id,
-                    'Point_ID_Second': point_id,
-                    'Actual_ID': actual_id_second,
-                    'Image_X_First': first_data['Image_X'][first_data['Point_IDs'].index(point_id)],
-                    'Image_Y_First': first_data['Image_Y'][first_data['Point_IDs'].index(point_id)],
-                    'Image_X_Second': second_data['Image_X'][i],
-                    'Image_Y_Second': second_data['Image_Y'][i],
-                    'Appearance_First': first_data['Appearance_Features'][first_data['Point_IDs'].index(point_id)],
-                    'Appearance_Second': second_data['Appearance_Features'][i],
-                })
-                seen.add(key)  
+    for idx1, actual_id_1 in enumerate(actual_ids_1):
+        if actual_id_1 in id_to_index_2:
+            idx2 = id_to_index_2[actual_id_1]
+            points1.append(point_ids_1[idx1])
+            points2.append(point_ids_2[idx2])
+
     
-    return associations
+    return points1, points2
+
+def extract_points(dictionary, point_ids_to_extract):
+    coordinates = []
+    
+    for i, point_id in enumerate(dictionary['Point_IDs']):
+        if point_id in point_ids_to_extract:
+            coordinates.append([dictionary['Image_X'][i], dictionary['Image_Y'][i]])
+    
+    return np.array(coordinates)
 
 def filter_3d_points(points, z_near, z_far):
     return np.array([
@@ -214,7 +224,7 @@ def compute_pose(points1, points2, K, z_near=0.1, z_far=100.0):
         P2 = np.hstack((R, t))
 
         points4D = cv2.triangulatePoints(P1, P2, points1_norm, points2_norm)
-        points4D[3, points4D[3] == 0] = 1e-10  # Evita divisioni per zero
+        points4D[3, points4D[3] == 0] = 1e-10  
 
         points3D = points4D[:3] / points4D[3]
 
@@ -229,9 +239,8 @@ def compute_pose(points1, points2, K, z_near=0.1, z_far=100.0):
         if is_valid_pose(R, t):
             return R, t
 
-    raise ValueError("Nessuna soluzione valida trovata")
 
-    
+
 
 def bundle_adjustment(camera_matrix, points_2d_list, points_3d_list, poses):
     pass
