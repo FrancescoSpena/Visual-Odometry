@@ -30,7 +30,7 @@ def check_poses(vo, iter):
     return scale_ratio
 
 def check_map(vo, iter, scale_ratio):
-    print("Check map...")
+    print("Test map:")
     gt = vo.gt  
     estimated_poses = []  
     gt_poses = []         

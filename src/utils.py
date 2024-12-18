@@ -73,22 +73,7 @@ def generate_path(id):
 
 
 def data_association(points1, points2, max_distance=0.8):
-    associations = []
-    
-    for i, p1 in enumerate(points1):
-        best_match = None
-        min_distance = float('inf')
-        
-        for j, p2 in enumerate(points2):
-            distance = euclidean(p1, p2)
-            if distance < min_distance:
-                min_distance = distance
-                best_match = j
-
-        if min_distance <= max_distance:
-            associations.append((i, best_match, min_distance))
-    
-    return associations
+    pass
 
 
 def extract_camera_data(file_path):
@@ -146,9 +131,7 @@ def extract_camera_data(file_path):
     }
 
 def compute_pose(K, points1, points2):
-    E, _ = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, prob=0.999, threshold=1.0)
-    _, R, t, _ = cv2.recoverPose(E, points1, points2, K)
-    return R, t
+    pass
 
 def read_traj(trajectory_path):
     ground_truths = []
@@ -163,72 +146,8 @@ def read_traj(trajectory_path):
     return ground_truths
 
 
-def getAbsoluteScale(gt, frame_id):
-    if frame_id <= 0 or frame_id >= len(gt):
-        return 1.0  
-
-    x_prev, y_prev, z_prev = gt[frame_id - 1]
-    x_curr, y_curr, z_curr = gt[frame_id]
-
-    scale = np.sqrt((x_curr - x_prev) ** 2 + (y_curr - y_prev) ** 2 + (z_curr - z_prev) ** 2)
-    return scale
-
-
 def bundle_adjustment(camera_matrix, points_2d_list, points_3d_list, poses):
-    num_frames = len(points_2d_list)
-    
-    def rotation_matrix_to_angle_axis(R):
-        return cv2.Rodrigues(R)[0].ravel()
-    
-    def angle_axis_to_rotation_matrix(angle_axis):
-        return cv2.Rodrigues(angle_axis)[0]
-    
-    camera_params = []
-    for R, t in poses:
-        angle_axis = rotation_matrix_to_angle_axis(R)
-        camera_params.append(np.hstack((angle_axis, t.ravel())))
-    camera_params = np.array(camera_params)
-    
-    points_3d = np.array(points_3d_list[0])
-    
-    def reprojection_error(params):
-        num_cameras = num_frames
-        camera_params = params[:num_cameras * 6].reshape((num_cameras, 6))
-        points_3d = params[num_cameras * 6:].reshape((-1, 3))
-        
-        error = []
-        for i in range(num_cameras):
-            R_vec = camera_params[i, :3]
-            t_vec = camera_params[i, 3:].reshape((3, 1))
-            R = angle_axis_to_rotation_matrix(R_vec)
-            
-            points_2d = points_2d_list[i]
-            projected_points = cv2.projectPoints(points_3d, R_vec, t_vec, camera_matrix, None)[0].reshape(-1, 2)
-            
-            min_len = min(len(projected_points), len(points_2d))
-            projected_points = projected_points[:min_len]
-            points_2d = points_2d[:min_len]
-            
-            error.append((projected_points - points_2d).ravel())
-        
-        return np.hstack(error)
-    
-    initial_params = np.hstack((camera_params.ravel(), points_3d.ravel()))
-    
-    result = least_squares(reprojection_error, initial_params, method='lm')
-    
-    optimized_camera_params = result.x[:num_frames * 6].reshape((num_frames, 6))
-    optimized_points_3d = result.x[num_frames * 6:].reshape((-1, 3))
-    
-    optimized_poses = []
-    for i in range(num_frames):
-        R_vec = optimized_camera_params[i, :3]
-        t_vec = optimized_camera_params[i, 3:].reshape((3, 1))
-        R = angle_axis_to_rotation_matrix(R_vec)
-        optimized_poses.append((R, t_vec))
-    
-    return optimized_poses, optimized_points_3d
-
+    pass
 
 def triangulate_points(K, R1, t1, R2, t2, points1, points2):
     P1 = K @ np.hstack((R1, t1.reshape(-1, 1)))
@@ -253,8 +172,3 @@ def gt2T(gt):
     T = np.eye(4)
     T[:3, 3] = gt 
     return T
-
-def ransac(points1, points2):
-    F, mask = cv2.findFundamentalMat(points1, points2, cv2.FM_RANSAC, 1.0, 0.99)
-    inliers = mask.ravel() == 1
-    return points1[inliers], points2[inliers]
