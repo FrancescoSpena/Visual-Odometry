@@ -158,7 +158,7 @@ def data_association(first_data, second_data):
         actual_id_second = second_data['Actual_IDs'][i]
         
         if point_id in id_map and id_map[point_id] == actual_id_second:
-            key = (point_id, actual_id_second)  # Chiave per identificare duplicati
+            key = (point_id, actual_id_second)  
             
             if key not in seen:
                 associations.append({
@@ -176,69 +176,62 @@ def data_association(first_data, second_data):
     
     return associations
 
-def filter_points(points, image_width, image_height):
+def filter_3d_points(points, z_near, z_far):
     return np.array([
-        (x, y) for x, y in points if 0 <= x < image_width and 0 <= y < image_height
+        point for point in points
+        if z_near < point[2] < z_far and point[2] > 0
     ])
 
-def triangulate_points(K, R1, t1, R2, t2, points1, points2):
-    pass
+def compute_pose(points1, points2, K, z_near=0.1, z_far=100.0):
+    points1 = np.array(points1)
+    points2 = np.array(points2)
 
-def compute_pose(points1, points2, K):
-    """
-    Compute pose
-    """
+    if len(points1) < 5 or len(points2) < 5:
+        raise ValueError("No 5 points!")
 
-    print(f"points1: {points1}")
-    print(f"points2: {points2}")
-    print("===============")
+    E, mask = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, threshold=1.0, prob=0.999)
 
-    # Assicurati che i punti siano di tipo float32
-    points1 = points1.astype(np.float32)
-    points2 = points2.astype(np.float32)
+    if E is None:
+        raise ValueError("No E found.")
 
-    # Calcolo dell'Essential Matrix
-    E, mask = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, prob=0.999, threshold=1.0)
-
-    if E is None or E.shape[1] != 3:
-        raise ValueError(f"E not valid: {E.shape if E is not None else 'None'}")
-
-    if E.shape[0] > 3:
-        E = E[:3, :]
-
-    points1_filtered = points1[mask.ravel() == 1]
-    points2_filtered = points2[mask.ravel() == 1]
-
-    if len(points1_filtered) < 5:
-        raise ValueError("No suff point after RANSAC.")
+    points1 = points1[mask.ravel() == 1]
+    points2 = points2[mask.ravel() == 1]
 
     R1, R2, t = cv2.decomposeEssentialMat(E)
 
-    solutions = [
+    possible_poses = [
         (R1, t),
         (R1, -t),
         (R2, t),
         (R2, -t)
     ]
 
-    def is_correct_solution(R, t, K, points1, points2):
-        P1 = np.dot(K, np.hstack((np.eye(3), np.zeros((3, 1)))))  
-        P2 = np.dot(K, np.hstack((R, t.reshape(3, 1))))           
+    points1_norm = cv2.undistortPoints(np.expand_dims(points1, axis=1), K, None)
+    points2_norm = cv2.undistortPoints(np.expand_dims(points2, axis=1), K, None)
 
-        points_4d = cv2.triangulatePoints(P1, P2, points1.T, points2.T)
-        points_3d = points_4d[:3] / points_4d[3]
+    def is_valid_pose(R, t):
+        P1 = np.hstack((np.eye(3), np.zeros((3, 1))))
+        P2 = np.hstack((R, t))
 
-        in_front1 = points_3d[2] > 0
-        in_front2 = (np.dot(R, points_3d) + t.reshape(3, 1))[2] > 0
+        points4D = cv2.triangulatePoints(P1, P2, points1_norm, points2_norm)
+        points4D[3, points4D[3] == 0] = 1e-10  # Evita divisioni per zero
 
-        return np.all(in_front1) and np.all(in_front2)
+        points3D = points4D[:3] / points4D[3]
 
-    for R, t in solutions:
-        if is_correct_solution(R, t, K, points1_filtered, points2_filtered):
+        valid_points = 0
+        for point in points3D.T:
+            if z_near < point[2] < z_far:
+                valid_points += 1
+
+        return valid_points / len(points3D.T) > 0.75
+
+    for R, t in possible_poses:
+        if is_valid_pose(R, t):
             return R, t
 
-    print("No solution. Identity and zero (fallback).")
-    return np.eye(3), np.zeros((3, 1))
+    raise ValueError("Nessuna soluzione valida trovata")
+
+    
 
 def bundle_adjustment(camera_matrix, points_2d_list, points_3d_list, poses):
     pass
