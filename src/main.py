@@ -54,17 +54,50 @@ def check_map(vo, iter, scale_ratio):
     return np.sqrt(np.mean(errors ** 2))
 
 
-
 def visualize_trajectories(vo, iter):
-    pass
+    rr.init("visualize_trajectories", spawn=True)
+    
+    gt = vo.gt  
+    estimated_poses = []  
+    gt_poses = []
+
+    T_abs = np.eye(4)
+
+    for i in range(iter):
+        T_rel = vo.run(i)
+        T_abs = T_abs @ T_rel 
+
+        estimated_poses.append(T_abs[:3, 3])
+
+        T_gt_curr = u.gt2T(gt[i])
+        gt_poses.append(T_gt_curr[:3, 3])
+
+    # Convert to numpy arrays for visualization
+    estimated_poses = np.array(estimated_poses)
+    gt_poses = np.array(gt_poses)
+
+    # Log the estimated trajectory
+    rr.log("estimated_trajectory", rr.Points3D(estimated_poses, colors=[255, 0, 0]))
+
+    # Log the ground truth trajectory
+    rr.log("ground_truth_trajectory", rr.Points3D(gt_poses, colors=[0, 255, 0]))
 
 if __name__ == '__main__':
-    iter = 50
-    vo = VisualOdometry()
-    ratio = check_poses(vo,iter)
-    rmse = check_map(vo,iter,ratio)
+    iter=100
+    optim=50
+    
+    # vo = VisualOdometry(optim=optim)
+    # ratio = check_poses(vo,iter)
+    # print(f"ratio = {ratio}")
 
-    print(f"Mean ratio = {ratio}")
+    # #I need to reconstruct the obj to reset all the internal parameters
+    vo = VisualOdometry(optim=optim)
+    rmse = check_map(vo,iter,1)
     print(f"RMSE = {rmse}")
+
+    # Visualize the trajectories
+    # vo = VisualOdometry(optim=optim)
+    # visualize_trajectories(vo, iter)
+
 
     

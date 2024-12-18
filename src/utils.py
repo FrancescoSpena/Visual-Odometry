@@ -71,7 +71,8 @@ def extract_other_info(file_path):
 def generate_path(id):
     return f"../data/meas-{id:05d}.dat"
 
-def data_association(points1, points2):
+
+def data_association(points1, points2, max_distance=0.8):
     associations = []
     
     for i, p1 in enumerate(points1):
@@ -83,10 +84,12 @@ def data_association(points1, points2):
             if distance < min_distance:
                 min_distance = distance
                 best_match = j
-        
-        associations.append((i, best_match, min_distance))
+
+        if min_distance <= max_distance:
+            associations.append((i, best_match, min_distance))
     
     return associations
+
 
 def extract_camera_data(file_path):
     camera_matrix = []
@@ -161,8 +164,8 @@ def read_traj(trajectory_path):
 
 
 def getAbsoluteScale(gt, frame_id):
-    if frame_id >= len(gt):
-        return 1.0  #Default 
+    if frame_id <= 0 or frame_id >= len(gt):
+        return 1.0  
 
     x_prev, y_prev, z_prev = gt[frame_id - 1]
     x_curr, y_curr, z_curr = gt[frame_id]
@@ -251,3 +254,7 @@ def gt2T(gt):
     T[:3, 3] = gt 
     return T
 
+def ransac(points1, points2):
+    F, mask = cv2.findFundamentalMat(points1, points2, cv2.FM_RANSAC, 1.0, 0.99)
+    inliers = mask.ravel() == 1
+    return points1[inliers], points2[inliers]
