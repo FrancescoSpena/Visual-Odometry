@@ -9,10 +9,11 @@ def main():
     num_frames = len(v.traj)
 
     for idx in range(num_frames - 1):
-        print(f"Esecuzione Visual Odometry per frame {idx}...")
+        #print(f"Esecuzione Visual Odometry per frame {idx}...")
         v.run(idx)
 
     estimated_poses = [u.m2T(R, t) for R, t in v.poses_camera]
+    print(estimated_poses[0])
     gt_poses = [u.gt2T(np.array(gt)) for gt in v.traj]
 
     est_positions = np.array([pose[:3, 3] for pose in estimated_poses])
@@ -49,28 +50,31 @@ def compute_rmse(est_positions, gt_positions):
     return rmse
 
 def plot_trajectories(est_positions, gt_positions):
-    """
-    Plot delle traiettorie utilizzando Rerun, con etichette delle pose.
-    """
     rr.init("visual_odometry", spawn=True)
-
     rr.log("estimated_trajectory", rr.Points3D(est_positions, colors=(255, 0, 0), radii=0.02))
     rr.log("ground_truth_trajectory", rr.Points3D(gt_positions, colors=(0, 255, 0), radii=0.02))
 
-    # for i, pos in enumerate(est_positions):
-    #     rr.log(f"estimated_trajectory/pose_{i}", rr.Points3D([pos], colors=(255, 0, 0), labels=[f"Est {i}"]))
-
-    # for i, pos in enumerate(gt_positions):
-    #     rr.log(f"ground_truth_trajectory/pose_{i}", rr.Points3D([pos], colors=(0, 255, 0), labels=[f"GT {i}"]))
-
+def visualize_pose_as_red_point(T):
+    rr.init("pose_visualization", spawn=True)
+    
+    position = T[:3, 3].reshape(1, 3)
+    
+    rr.log("pose", rr.Points3D(position, colors=(255, 0, 0), radii=0.05))
+    print(f"Pose visualized at position: {position}")
 
 if __name__ == "__main__":
-    #main()
     
     v = vo.VisualOdometry()
-    T_abs = np.eye(4)
-    for i in range(120):
-        print(f"T_abs:\n {T_abs}")
-        T_abs = T_abs @ v.run(i)
+
+    T = np.eye(4)
+    T_gt = np.eye(4)
+    for i in range(3):
+        T = T @ v.run(i)
+        T_gt = T_gt @ u.gt2T(np.array([v.traj[i]]))
+        
+        print(f"T:\n {T}")
+        print(f"T_gt:\n {T_gt}")   
+        print("======") 
+    
 
     

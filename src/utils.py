@@ -4,6 +4,7 @@ from scipy.spatial.distance import euclidean
 import numpy as np
 import cv2
 from scipy.optimize import least_squares
+from scipy.spatial.distance import cosine 
 
 def extract_measurements(file_path):
     point_data = []
@@ -148,43 +149,45 @@ def gt2T(gt):
     T[:3, 3] = gt 
     return T
 
-def calculate_threshold(z_near, z_far, width, height):
-    depth_range = z_far - z_near
-    max_dimension = max(width, height)
-    threshold = depth_range / max_dimension
-
-    return threshold
-
-
-def data_association(dict1, dict2):
-    points1 = []
-    points2 = []
+def data_association(first_data, second_data, threshold=0.2):
+    associations = []
     
-    actual_ids_1 = dict1['Actual_IDs']
-    point_ids_1 = dict1['Point_IDs']
-
-    actual_ids_2 = dict2['Actual_IDs']
-    point_ids_2 = dict2['Point_IDs']
-
-    id_to_index_2 = {actual_id: idx for idx, actual_id in enumerate(actual_ids_2)}
+    for i, actual_id1 in enumerate(first_data['Actual_IDs']):
+        candidate_indices = [j for j, actual_id2 in enumerate(second_data['Actual_IDs']) if actual_id1 == actual_id2]
+        
+        if len(candidate_indices) == 1:
+            associations.append((i, candidate_indices[0]))
+        elif len(candidate_indices) > 1:
+            min_distance = float('inf')
+            best_match_idx = None
+            
+            for j in candidate_indices:
+                distance = cosine(first_data['Appearance_Features'][i], second_data['Appearance_Features'][j])
+                if distance < min_distance:
+                    min_distance = distance
+                    best_match_idx = j
+            
+            if min_distance < threshold:
+                associations.append((i, best_match_idx))
     
-    for idx1, actual_id_1 in enumerate(actual_ids_1):
-        if actual_id_1 in id_to_index_2:
-            idx2 = id_to_index_2[actual_id_1]
-            points1.append(point_ids_1[idx1])
-            points2.append(point_ids_2[idx2])
+    # for i, j in associations:
+    #     print(f"Point {i} in first_data -> Point {j} in second_data")
+    #     print(f"  Appearance Features 1:\n {first_data['Appearance_Features'][i]}")
+    #     print(f"  Appearance Features 2:\n {second_data['Appearance_Features'][j]}")
+    #     print("==================")
+        
+    points_first = np.array([
+        [first_data['Image_X'][i], first_data['Image_Y'][i]]
+        for i, _ in associations
+    ])
+    
+    points_second = np.array([
+        [second_data['Image_X'][j], second_data['Image_Y'][j]]
+        for _, j in associations
+    ])
+    
+    return points_first, points_second
 
-    
-    return points1, points2
-
-def extract_points(dictionary, point_ids_to_extract):
-    coordinates = []
-    
-    for i, point_id in enumerate(dictionary['Point_IDs']):
-        if point_id in point_ids_to_extract:
-            coordinates.append([dictionary['Image_X'][i], dictionary['Image_Y'][i]])
-    
-    return np.array(coordinates)
 
 def filter_3d_points(points, z_near, z_far):
     return np.array([
@@ -193,9 +196,6 @@ def filter_3d_points(points, z_near, z_far):
     ])
 
 def compute_pose(points1, points2, K, z_near=0.1, z_far=100.0):
-    points1 = np.array(points1)
-    points2 = np.array(points2)
-
     if len(points1) < 5 or len(points2) < 5:
         raise ValueError("No 5 points!")
 
@@ -239,11 +239,6 @@ def compute_pose(points1, points2, K, z_near=0.1, z_far=100.0):
         if is_valid_pose(R, t):
             return R, t
 
-
-
-
-def bundle_adjustment(camera_matrix, points_2d_list, points_3d_list, poses):
-    pass
 
 
 
