@@ -149,6 +149,16 @@ def gt2T(gt):
     T[:3, 3] = gt 
     return T
 
+def plot_match(points1, points2):
+    import matplotlib.pyplot as plt
+
+    plt.figure()
+    plt.scatter(points1[:, 0], points1[:, 1], label="Frame 1")
+    plt.scatter(points2[:, 0], points2[:, 1], label="Frame 2")
+    plt.legend()
+    plt.title("Matched Points")
+    plt.show()
+
 def data_association(first_data, second_data, threshold=0.2):
     associations = []
     
@@ -190,16 +200,10 @@ def data_association(first_data, second_data, threshold=0.2):
 
 
 def compute_pose(points1, points2, K, z_near=0.0, z_far=5.0):
-    # Calcolare la matrice essenziale direttamente con RANSAC
     E, mask = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, threshold=1.0, prob=0.999)
-    #print(f"Matrice Essenziale E:\n{E}")
-
+    
     # Decomporre E per ottenere R e t
     _, R, t, _ = cv2.recoverPose(E, points1, points2, K)
-    # print("Rotazione R:")
-    # print(R)
-    # print("\nTraslazione t:")
-    # print(t)
 
     # Funzione per triangolare e verificare la validità della soluzione
     def triangulate_and_check(R, t, points1, points2, K, z_near=0.0, z_far=5.0):

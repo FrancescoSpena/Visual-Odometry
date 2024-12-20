@@ -4,58 +4,50 @@ import VisualOdometry as vo
 import utils as u
 import rerun as rr
 
-def compute_scale(est_positions, gt_positions):
-    num_points = min(len(est_positions), len(gt_positions))
-    est_distances = np.linalg.norm(np.diff(est_positions[:num_points], axis=0), axis=1)
-    gt_distances = np.linalg.norm(np.diff(gt_positions[:num_points], axis=0), axis=1)
-    scale = np.sum(gt_distances) / np.sum(est_distances)
-    return scale
+def load_groundtruth_poses(traj_path):
+    gt_positions = []
+    with open(traj_path, 'r') as f:
+        for line in f:
+            values = line.strip().split()
+            if len(values) >= 7:
+                x, y, z = map(float, values[4:7])
+                gt_positions.append(np.array([x, y, z]))
+    return gt_positions
 
-def compute_rmse(est_positions, gt_positions):
-    errors = []
+def compute_relative_scale(est_translation, gt_translation):
+    est_norm = np.linalg.norm(est_translation)
+    gt_norm = np.linalg.norm(gt_translation)
+    return gt_norm / est_norm if est_norm != 0 else 1.0
 
-    min_length = min(len(est_positions), len(gt_positions))
-
-    for i in range(min_length):
-        error = np.linalg.norm(est_positions[i] - gt_positions[i])
-        errors.append(error)
-
-    rmse = np.sqrt(np.mean(np.array(errors) ** 2))
-    return rmse
-
-def plot_trajectories(est_positions, gt_positions):
+def plot_rerun(est_positions,gt_traj_positions):
     rr.init("visual_odometry", spawn=True)
     rr.log("estimated_trajectory", rr.Points3D(est_positions, colors=(255, 0, 0), radii=0.02))
-    rr.log("ground_truth_trajectory", rr.Points3D(gt_positions, colors=(0, 255, 0), radii=0.02))
-
-def compute_scale(T_est, T_gt):
-    est_translation = np.linalg.norm(T_est[:3, 3])
-    gt_translation = np.linalg.norm(T_gt[:3, 3])
-    return gt_translation / est_translation if est_translation != 0 else 1.0
-
-def correct_translation(T):
-    T[:3, 3] = -T[:3, 3]
-    return T
+    rr.log("ground_truth_trajectory", rr.Points3D(gt_traj_positions, colors=(0, 255, 0), radii=0.02))
 
 if __name__ == "__main__":
     v = vo.VisualOdometry()
+    gt_positions = load_groundtruth_poses('../data/trajectoy.dat')
+
     T = np.eye(4)
     T_gt = np.eye(4)
 
-    for i in range(10):
-        T_increment = v.run(i)
+    est_positions = [T[:3, 3].copy()]
+    gt_traj_positions = [gt_positions[0]]
+
+    for i in range(1, len(gt_positions)):
+        T_increment = v.run(i - 1)
         T = T @ T_increment
 
-        T_gt_increment = u.gt2T(np.array([v.traj[i]]))
-        T_gt = T_gt @ T_gt_increment
+        gt_translation_rel = gt_positions[i] - gt_positions[i - 1]
+        est_translation_rel = T[:3, 3] - est_positions[-1]
 
-        T = correct_translation(T)
-        scale = compute_scale(T, T_gt)
-        T[:3, 3] *= scale
+        scale = compute_relative_scale(est_translation_rel, gt_translation_rel)
+        T[:3, 3] = est_positions[-1] + scale * est_translation_rel
 
-        print(f"Frame {i}")
-        print(f"T:\n{T}")
-        print(f"T_gt:\n{T_gt}")
-        print("======")
+        est_positions.append(T[:3, 3].copy())
+        gt_traj_positions.append(gt_positions[i])
 
-    
+    est_positions = np.array(est_positions)
+    gt_traj_positions = np.array(gt_traj_positions)
+
+    plot_rerun(est_positions,gt_traj_positions)

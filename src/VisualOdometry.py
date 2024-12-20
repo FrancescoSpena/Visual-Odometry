@@ -11,9 +11,7 @@ class VisualOdometry():
         self.height = self.camera_info['height']
         self.z_near = self.camera_info['z_near']
         self.z_far = self.camera_info['z_far']
-        
-        self.traj = u.read_traj(traj_path)
-        
+
         self.poses_camera = []
         self.R = np.eye(3)
         self.t = np.zeros((3,1))
@@ -26,7 +24,6 @@ class VisualOdometry():
     def run(self, idx):
         '''Return the transformation between the frame idx and idx+1'''
         #Extract data from measurements
-        
         path1 = u.generate_path(idx)
         path2 = u.generate_path(idx+1)
         first_data = u.extract_measurements(path1)
