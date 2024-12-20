@@ -189,56 +189,55 @@ def data_association(first_data, second_data, threshold=0.2):
     return points_first, points_second
 
 
-def filter_3d_points(points, z_near, z_far):
-    return np.array([
-        point for point in points
-        if z_near < point[2] < z_far and point[2] > 0
-    ])
-
-def compute_pose(points1, points2, K, z_near=0.1, z_far=100.0):
-    if len(points1) < 5 or len(points2) < 5:
-        raise ValueError("No 5 points!")
-
+def compute_pose(points1, points2, K, z_near=0.0, z_far=5.0):
+    # Calcolare la matrice essenziale direttamente con RANSAC
     E, mask = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, threshold=1.0, prob=0.999)
+    #print(f"Matrice Essenziale E:\n{E}")
 
-    if E is None:
-        raise ValueError("No E found.")
+    # Decomporre E per ottenere R e t
+    _, R, t, _ = cv2.recoverPose(E, points1, points2, K)
+    # print("Rotazione R:")
+    # print(R)
+    # print("\nTraslazione t:")
+    # print(t)
 
-    points1 = points1[mask.ravel() == 1]
-    points2 = points2[mask.ravel() == 1]
+    # Funzione per triangolare e verificare la validità della soluzione
+    def triangulate_and_check(R, t, points1, points2, K, z_near=0.0, z_far=5.0):
+        # Matrici di proiezione per le due viste
+        P1 = K @ np.hstack((np.eye(3), np.zeros((3, 1))))
+        P2 = K @ np.hstack((R, t))
+        
+        # Triangolazione dei punti
+        points1_hom = points1.T  # Shape: (2, N)
+        points2_hom = points2.T  # Shape: (2, N)
+        points4D = cv2.triangulatePoints(P1, P2, points1_hom, points2_hom)
+        points3D = points4D / points4D[3]  # Converti in coordinate omogenee (x, y, z, 1)
+        
+        # Estrai le profondità Z dei punti triangolati
+        z_values = points3D[2]
+        #print(f"Profondità Z dei punti triangolati:\n{z_values}")
 
-    R1, R2, t = cv2.decomposeEssentialMat(E)
+        # Verifica delle condizioni di cheirality e limiti di profondità
+        cheirality_check = np.all(z_values > 0)
+        depth_check = np.all((z_values >= z_near) & (z_values <= z_far))
+        
+        #print(f"Cheirality check: {cheirality_check}")
+        #print(f"Depth check: {depth_check}")
+        
+        return cheirality_check and depth_check
 
-    possible_poses = [
-        (R1, t),
-        (R1, -t),
-        (R2, t),
-        (R2, -t)
-    ]
+    # Possibili soluzioni per (R, t)
+    poss_sol = [(R, t), (R, -t), (R.T, t), (R.T, -t)]
+    
+    for i, (R_candidate, t_candidate) in enumerate(poss_sol):
+        #print(f"\nVerifica soluzione {i+1}:")
+        scale_factor = 0.01  # Prova a ridurre la traslazione di un fattore adeguato
+        t_scaled = t_candidate * scale_factor
 
-    points1_norm = cv2.undistortPoints(np.expand_dims(points1, axis=1), K, None)
-    points2_norm = cv2.undistortPoints(np.expand_dims(points2, axis=1), K, None)
+        if triangulate_and_check(R_candidate, t_scaled, points1, points2, K, z_near, z_far):
+            #print(f"Soluzione valida trovata: {i+1}")
+            return R_candidate, t_candidate
 
-    def is_valid_pose(R, t):
-        P1 = np.hstack((np.eye(3), np.zeros((3, 1))))
-        P2 = np.hstack((R, t))
-
-        points4D = cv2.triangulatePoints(P1, P2, points1_norm, points2_norm)
-        points4D[3, points4D[3] == 0] = 1e-10  
-
-        points3D = points4D[:3] / points4D[3]
-
-        valid_points = 0
-        for point in points3D.T:
-            if z_near < point[2] < z_far:
-                valid_points += 1
-
-        return valid_points / len(points3D.T) > 0.75
-
-    for R, t in possible_poses:
-        if is_valid_pose(R, t):
-            return R, t
-
-
-
+    print("No sol.")
+    return np.eye(3), np.zeros((3, 1))
 

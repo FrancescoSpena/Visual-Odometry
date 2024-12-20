@@ -36,14 +36,10 @@ class VisualOdometry():
         points1, points2 = u.data_association(first_data,
                                               second_data)
 
-
         #compute pose
         self.R, self.t = u.compute_pose(points1,
-                             points2,
-                             self.K,
-                             self.z_near,
-                             self.z_far)
-        
+                                        points2,
+                                        self.K)
         
         self.poses_camera.append((self.R,self.t))
         return u.m2T(self.R, self.t)
