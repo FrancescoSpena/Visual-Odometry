@@ -24,9 +24,25 @@ def plot_rerun(est_positions,gt_traj_positions):
     rr.log("estimated_trajectory", rr.Points3D(est_positions, colors=(255, 0, 0), radii=0.02))
     rr.log("ground_truth_trajectory", rr.Points3D(gt_traj_positions, colors=(0, 255, 0), radii=0.02))
 
+def compute_rotation(est_positions, gt_positions):
+    est_centered = est_positions - np.mean(est_positions, axis=0)
+    gt_centered = gt_positions - np.mean(gt_positions, axis=0)
+
+    H = est_centered.T @ gt_centered
+    U, S, Vt = np.linalg.svd(H)
+    R_optimal = Vt.T @ U.T
+
+    if np.linalg.det(R_optimal) < 0:
+        Vt[-1, :] *= -1
+        R_optimal = Vt.T @ U.T
+
+    return R_optimal
+
+
 if __name__ == "__main__":
     v = vo.VisualOdometry()
     gt_positions = load_groundtruth_poses('../data/trajectoy.dat')
+    iter = len(gt_positions)
 
     T = np.eye(4)
     T_gt = np.eye(4)
@@ -34,7 +50,7 @@ if __name__ == "__main__":
     est_positions = [T[:3, 3].copy()]
     gt_traj_positions = [gt_positions[0]]
 
-    for i in range(1, len(gt_positions)):
+    for i in range(1, iter):
         T_increment = v.run(i - 1)
         T = T @ T_increment
 
@@ -50,4 +66,9 @@ if __name__ == "__main__":
     est_positions = np.array(est_positions)
     gt_traj_positions = np.array(gt_traj_positions)
 
-    plot_rerun(est_positions,gt_traj_positions)
+    # Calcolare la rotazione e applicarla
+    R_correct = compute_rotation(est_positions, gt_traj_positions)
+    est_positions_rotated = (R_correct @ est_positions.T).T
+
+    # Plottare i punti rotati
+    plot_rerun(est_positions_rotated, gt_traj_positions)
