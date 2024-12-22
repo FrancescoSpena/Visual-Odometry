@@ -354,7 +354,7 @@ def rotation_from_vector(w):
 
 def update_pose(R, t, delta_pose):
     delta_R = rotation_from_vector(delta_pose[:3])
-    delta_t = delta_pose[3:]
+    delta_t = delta_pose[3:].reshape(3,1)
 
     R = delta_R @ R 
     t = t + delta_t

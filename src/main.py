@@ -6,9 +6,11 @@ import rerun as rr
 
 if __name__ == "__main__":
     v = vo.VisualOdometry()
-    R, t, points_3d, status = v.init()
+    R, t, _, status = v.init()
 
-    print(f"Status: {status}")
-
+    print(f"Status init: {status}")
+    print("Estimation...")
     for i in range(1,120):
-        v.run(i)
+        R, t = v.run(i)
+    
+    print("Estimation complete.")

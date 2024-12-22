@@ -16,9 +16,7 @@ class VisualOdometry():
         self.t = np.zeros((3,1))
         self.points_3d = None
         self.status = True
-
-        self.curr_3d_points = None
-        self.max_iter = 1
+        self.max_iter = 100
 
     def init(self):
         path0 = u.generate_path(0)
@@ -40,7 +38,6 @@ class VisualOdometry():
                                        points2,
                                        self.K)
         
-        self.curr_3d_points = self.points_3d
         if(np.linalg.det(self.R) != 1 or np.linalg.norm(self.t) == 0):
             self.status = False
         
@@ -63,10 +60,7 @@ class VisualOdometry():
 
             next_frame_normals = u.estimate_normals(original_frame_points)
 
-            errors = u.compute_errors(transformed_frame_points,
-                                     original_frame_points,
-                                     next_frame_normals)
-            
+
             J, residuals = u.compute_jacobian_and_residuals(transformed_frame_points,
                                                             original_frame_points,
                                                             next_frame_normals)
