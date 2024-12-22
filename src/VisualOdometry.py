@@ -58,17 +58,4 @@ class VisualOdometry():
             original_frame_points, transformed_frame_points = u.data_association(transformed_data,
                                                                     data_next_frame)
 
-            next_frame_normals = u.estimate_normals(original_frame_points)
-
-
-            J, residuals = u.compute_jacobian_and_residuals(transformed_frame_points,
-                                                            original_frame_points,
-                                                            next_frame_normals)
-            
-            delta_pose, _, _, _ = np.linalg.lstsq(J, residuals, rcond=None)
-
-            self.R, self.t = u.update_pose(self.R, 
-                                           self.t,
-                                           delta_pose)
-            
-            return self.R, self.t 
+            pass

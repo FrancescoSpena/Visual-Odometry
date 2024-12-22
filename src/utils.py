@@ -206,38 +206,6 @@ def triangulate(R, t, points1, points2, K):
 
     return points3D
 
-
-def estimate_normals(target_points, k=10):
-    target_points = np.hstack((target_points, np.zeros((target_points.shape[0], 1))))
-
-    kd_tree = KDTree(target_points)
-    normals = []
-
-    for p in target_points:
-        num_points = len(target_points)
-        k_adjusted = min(k + 1, num_points)
-
-        _, indices = kd_tree.query(p, k=k_adjusted)
-
-        neighbors = target_points[indices[1:]]
-
-        mean = np.mean(neighbors, axis=0)
-        covariance_matrix = np.zeros((3, 3))
-        for n in neighbors:
-            diff = n - mean
-            covariance_matrix += np.outer(diff, diff)
-
-        eigenvalues, eigenvectors = np.linalg.eigh(covariance_matrix)
-
-        normal = eigenvectors[:, np.argmin(eigenvalues)]
-
-        if np.dot(normal, p) > 0:
-            normal = -normal
-
-        normals.append(normal)
-
-    return np.array(normals)
-
 def compute_pose(points1, points2, K, z_near=0.0, z_far=5.0):
     E, mask = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, threshold=1.0, prob=0.999)
     
@@ -290,49 +258,6 @@ def transform_point_in_dict(point_data, R, t):
     point_data['Image_Y'] = transformed_y
 
     return point_data
-
-def compute_errors(transformed_points, target_points, target_normals):
-    transformed_points = np.hstack((transformed_points, np.zeros((transformed_points.shape[0], 1))))
-    target_points = np.hstack((target_points, np.zeros((target_points.shape[0], 1))))
-    
-    errors = []
-
-    for i in range(len(transformed_points)):
-        p_transformed = transformed_points[i]
-        p_target = target_points[i]
-        n_target = target_normals[i]
-
-        error = ((p_transformed - p_target) @ n_target)
-        errors.append(error)
-
-    return errors
-
-
-def compute_jacobian_and_residuals(transformed_points, target_points, target_normals):
-    transformed_points = np.hstack((transformed_points, np.zeros((transformed_points.shape[0], 1))))
-    target_points = np.hstack((target_points, np.zeros((target_points.shape[0], 1))))
-    
-    J = []
-    residuals = []
-
-    for i in range(len(transformed_points)):
-        p_transformed = transformed_points[i]
-        n_target = target_normals[i]
-
-        J_rot = np.cross(p_transformed, n_target)  
-        J_trans = n_target                         
-
-        J.append(np.hstack((J_rot, J_trans)))
-
-        residual = np.dot((p_transformed - target_points[i]), n_target)
-        residuals.append(residual)
-    
-    J = np.array(J)  
-    residuals = np.array(residuals)  
-
-    return J, residuals
-
-import numpy as np
 
 def rotation_from_vector(w):
     theta = np.linalg.norm(w) 

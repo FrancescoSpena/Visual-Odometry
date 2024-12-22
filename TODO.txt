@@ -1,0 +1,78 @@
+Function EstimatePoseUsingPICP(source_points, target_points, target_normals, initial_pose, max_iterations, tolerance):
+    Input:
+        source_points: Set di punti 3D nella vista corrente (Nx3).
+        target_points: Set di punti 3D nella vista di riferimento (Nx3).
+        target_normals: Normali associate ai target_points (Nx3).
+        initial_pose: Posa iniziale stimata (R, t).
+        max_iterations: Numero massimo di iterazioni per ICP.
+        tolerance: Tolleranza per la convergenza.
+
+    Output:
+        R, t: Rotazione e traslazione che descrivono la posa relativa (aggiornata).
+        converged: True se ICP converge entro il numero massimo di iterazioni.
+
+    // Inizializza la posa corrente con la stima iniziale
+    R, t ← initial_pose.R, initial_pose.t
+
+    for iter in range(max_iterations):
+        // Step 1: Trasforma i source_points con la posa corrente
+        transformed_points ← TransformPoints(source_points, R, t)
+
+        // Step 2: Trova i punti corrispondenti nel target (usando nearest neighbors o KD-tree)
+        correspondences ← FindCorrespondences(transformed_points, target_points)
+
+        // Step 3: Calcola gli errori punto-piano
+        errors ← ComputePointToPlaneErrors(transformed_points, target_points, target_normals, correspondences)
+
+        // Step 4: Costruisci il sistema lineare per minimizzare l'errore punto-piano
+        J, residuals ← BuildJacobianAndResiduals(transformed_points, target_points, target_normals, correspondences)
+
+        // Step 5: Risolvi il sistema lineare per trovare l'aggiornamento della posa
+        delta_pose ← SolveLinearSystem(J, residuals)
+
+        // Step 6: Aggiorna la posa corrente
+        R, t ← UpdatePose(R, t, delta_pose)
+    
+        // Step 7: Controlla la convergenza
+        if Norm(delta_pose) < tolerance:
+            converged ← True
+            Return R, t, converged
+
+    // Se il loop termina senza convergenza
+    converged ← False
+    Return R, t, converged
+
+// Funzione di supporto per trasformare i punti
+Function TransformPoints(points, R, t):
+    transformed_points ← R @ points.T + t  // Applica rotazione e traslazione
+    Return transformed_points.T
+
+// Funzione per costruire il Jacobiano e i residui
+Function BuildJacobianAndResiduals(transformed_points, target_points, target_normals, correspondences):
+    J ← []
+    residuals ← []
+    for i in correspondences:
+        p_transformed ← transformed_points[i]
+        n_target ← target_normals[i]
+
+        // Jacobiano per rotazione e traslazione
+        J_rot ← CrossProductMatrix(p_transformed) @ n_target
+        J_trans ← n_target
+
+        J.append([J_rot, J_trans])
+        residuals.append(DotProduct(p_transformed - target_points[i], n_target))
+    Return J, residuals
+
+// Funzione per risolvere il sistema lineare
+Function SolveLinearSystem(J, residuals):
+    delta_pose ← SolveLeastSquares(J, residuals)
+    Return delta_pose
+
+// Funzione per aggiornare la posa
+Function UpdatePose(R, t, delta_pose):
+    delta_R ← RotationFromVector(delta_pose[:3])  // Usa i primi 3 elementi per l'aggiornamento rotazionale
+    delta_t ← delta_pose[3:]  // Usa gli ultimi 3 elementi per la traslazione
+
+    R ← delta_R @ R
+    t ← t + delta_t
+    Return R, t
