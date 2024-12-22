@@ -151,7 +151,6 @@ def gt2T(gt):
 
 def plot_match(points1, points2):
     import matplotlib.pyplot as plt
-
     plt.figure()
     plt.scatter(points1[:, 0], points1[:, 1], label="Frame 1")
     plt.scatter(points2[:, 0], points2[:, 1], label="Frame 2")
@@ -180,12 +179,6 @@ def data_association(first_data, second_data, threshold=0.2):
             if min_distance < threshold:
                 associations.append((i, best_match_idx))
     
-    # for i, j in associations:
-    #     print(f"Point {i} in first_data -> Point {j} in second_data")
-    #     print(f"  Appearance Features 1:\n {first_data['Appearance_Features'][i]}")
-    #     print(f"  Appearance Features 2:\n {second_data['Appearance_Features'][j]}")
-    #     print("==================")
-        
     points_first = np.array([
         [first_data['Image_X'][i], first_data['Image_Y'][i]]
         for i, _ in associations
@@ -202,46 +195,32 @@ def data_association(first_data, second_data, threshold=0.2):
 def compute_pose(points1, points2, K, z_near=0.0, z_far=5.0):
     E, mask = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, threshold=1.0, prob=0.999)
     
-    # Decomporre E per ottenere R e t
     _, R, t, _ = cv2.recoverPose(E, points1, points2, K)
 
-    # Funzione per triangolare e verificare la validità della soluzione
     def triangulate_and_check(R, t, points1, points2, K, z_near=0.0, z_far=5.0):
-        # Matrici di proiezione per le due viste
         P1 = K @ np.hstack((np.eye(3), np.zeros((3, 1))))
         P2 = K @ np.hstack((R, t))
         
-        # Triangolazione dei punti
         points1_hom = points1.T  # Shape: (2, N)
         points2_hom = points2.T  # Shape: (2, N)
         points4D = cv2.triangulatePoints(P1, P2, points1_hom, points2_hom)
-        points3D = points4D / points4D[3]  # Converti in coordinate omogenee (x, y, z, 1)
+        points3D = points4D / points4D[3]  # (x, y, z, 1)
         
-        # Estrai le profondità Z dei punti triangolati
         z_values = points3D[2]
-        #print(f"Profondità Z dei punti triangolati:\n{z_values}")
-
-        # Verifica delle condizioni di cheirality e limiti di profondità
+        
         cheirality_check = np.all(z_values > 0)
         depth_check = np.all((z_values >= z_near) & (z_values <= z_far))
         
-        #print(f"Cheirality check: {cheirality_check}")
-        #print(f"Depth check: {depth_check}")
-        
         return cheirality_check and depth_check
 
-    # Possibili soluzioni per (R, t)
     poss_sol = [(R, t), (R, -t), (R.T, t), (R.T, -t)]
     
     for i, (R_candidate, t_candidate) in enumerate(poss_sol):
-        #print(f"\nVerifica soluzione {i+1}:")
-        scale_factor = 0.01  # Prova a ridurre la traslazione di un fattore adeguato
+        scale_factor = 0.01  
         t_scaled = t_candidate * scale_factor
 
         if triangulate_and_check(R_candidate, t_scaled, points1, points2, K, z_near, z_far):
-            #print(f"Soluzione valida trovata: {i+1}")
             return R_candidate, t_candidate
 
     print("No sol.")
     return np.eye(3), np.zeros((3, 1))
-

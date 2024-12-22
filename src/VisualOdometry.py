@@ -4,7 +4,7 @@ import cv2
 import matplotlib.pyplot as plt
 
 class VisualOdometry():
-    def __init__(self, camera_path='../data/camera.dat', traj_path='../data/trajectoy.dat', optim=50):
+    def __init__(self, camera_path='../data/camera.dat'):
         self.camera_info = u.extract_camera_data(camera_path)
         self.K = self.camera_info['camera_matrix']
         self.width = self.camera_info['width']
@@ -12,32 +12,6 @@ class VisualOdometry():
         self.z_near = self.camera_info['z_near']
         self.z_far = self.camera_info['z_far']
 
-        self.poses_camera = []
-        self.R = np.eye(3)
-        self.t = np.zeros((3,1))
-        
-        self.idx = 0
-        self.all_2d_points = []
-        self.all_3d_points = []
-        self.optim = optim
-
-    def run(self, idx):
-        '''Return the transformation between the frame idx and idx+1'''
-        #Extract data from measurements
-        path1 = u.generate_path(idx)
-        path2 = u.generate_path(idx+1)
-        first_data = u.extract_measurements(path1)
-        second_data = u.extract_measurements(path2)
-
-        #data association
-        points1, points2 = u.data_association(first_data,
-                                              second_data)
-
-        #compute pose
-        self.R, self.t = u.compute_pose(points1,
-                                        points2,
-                                        self.K)
-        
-        self.poses_camera.append((self.R,self.t))
-        return u.m2T(self.R, self.t)
+    def init(self):
+        pass
         
