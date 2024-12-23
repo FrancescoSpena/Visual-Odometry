@@ -11,13 +11,10 @@ if __name__ == "__main__":
     print(f"Status init: {status}")
 
     for i in range(1,10):
-        R, t, status = v.run(i)
-        print(f"from frame {i} to {i+1}")
-        if status == True:
-            print(f"R:\n {R}")
-            print(f"t:\n {t}")
-            print(f"delta:\n {v.dx}")
-            print("========")
-        else:
-            print("No solution found.")
-            print("========")
+        R, t = v.run(i)
+        print(f"from frame 0 to {i+1}")
+        print(f"R:\n {R}")
+        print(f"t:\n {t}")
+        print(f"delta:\n {v.dx}")
+        print("========")
+

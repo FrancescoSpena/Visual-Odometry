@@ -318,7 +318,6 @@ def error_and_jacobian(world_point, reference_image_point, K):
                                                     K)
     
     if(is_true == False):
-       #print("No good proj")
        status = False
     
     error = predicted_image_point - reference_image_point
@@ -328,11 +327,6 @@ def error_and_jacobian(world_point, reference_image_point, K):
     J_r[:3, 3:] = skew(world_point)
 
     phom = K @ world_point
-    
-    if np.isclose(phom[2], 0):
-        #print("phom close to zero")
-        status = False 
-    
     iz = 1.0 / phom[2]
     iz2 = iz * iz 
 
@@ -359,8 +353,6 @@ def linearize(assoc, world_points, reference_image_points, K, kernel_threshold=1
                                               K)
 
         if status == False:
-            #print("Status jacobian false")
-            status_lin = False
             continue
 
         chi = np.dot(error,error)
@@ -372,7 +364,7 @@ def linearize(assoc, world_points, reference_image_points, K, kernel_threshold=1
         H += J.T @ J * lambda_factor
         b += J.T @ error * lambda_factor
 
-    return H, b, status_lin
+    return H, b
 
 def solve(H, b): 
     try: 
