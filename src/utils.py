@@ -151,6 +151,40 @@ def gt2T(gt):
     T[:3, 3] = gt 
     return T
 
+def T2m(T):
+    R = T[:3, :3]
+    t = T[:3, 3].reshape(3,1)
+    return R, t
+
+def v2T(v):
+    def Rx(roll):
+        return np.array([
+            [1, 0, 0],
+            [0, np.cos(roll), -np.sin(roll)],
+            [0, np.sin(roll), np.cos(roll)]
+        ])
+
+    def Ry(pitch):
+        return np.array([
+            [np.cos(pitch), 0, np.sin(pitch)],
+            [0, 1, 0],
+            [-np.sin(pitch), 0, np.cos(pitch)]
+        ])
+
+    def Rz(yaw):
+        return np.array([
+            [np.cos(yaw), -np.sin(yaw), 0],
+            [np.sin(yaw), np.cos(yaw), 0],
+            [0, 0, 1]
+        ])
+
+    R = Rx(v[3]) @ Ry(v[4]) @ Rz(v[5])
+    T = np.eye(4)
+    T[:3, :3] = R
+    T[:3, 3] = v[:3]
+
+    return T
+
 def plot_match(points1, points2):
     import matplotlib.pyplot as plt
     plt.figure()
@@ -181,6 +215,12 @@ def data_association(first_data, second_data, threshold=0.2):
             if min_distance < threshold:
                 associations.append((i, best_match_idx))
     
+    # for i, j in associations:
+    #     print(f"Point {i} in first_data -> Point {j} in second_data")
+    #     print(f"  Appearance Features 1:\n {first_data['Appearance_Features'][i]}")
+    #     print(f"  Appearance Features 2:\n {second_data['Appearance_Features'][j]}")
+    #     print("==================")
+    
     points_first = np.array([
         [first_data['Image_X'][i], first_data['Image_Y'][i]]
         for i, _ in associations
@@ -191,23 +231,23 @@ def data_association(first_data, second_data, threshold=0.2):
         for _, j in associations
     ])
     
-    return points_first, points_second
+    return points_first, points_second, associations
 
 def triangulate(R, t, points1, points2, K):
     P1 = K @ np.hstack((np.eye(3), np.zeros((3, 1))))
     P2 = K @ np.hstack((R, t))
 
-    points1_hom = points1.T  # Shape: (2, N)
-    points2_hom = points2.T  # Shape: (2, N)
+    points1_hom = points1.T  
+    points2_hom = points2.T  
 
     points4D = cv2.triangulatePoints(P1, P2, points1_hom, points2_hom)
-    points3D_hom = points4D / points4D[3]  # Normalizza per ottenere coordinate omogenee
-    points3D = points3D_hom[:3].T  # Converte in forma Nx3
+    points3D_hom = points4D / points4D[3]  
+    points3D = points3D_hom[:3].T  
 
     return points3D
 
 def compute_pose(points1, points2, K, z_near=0.0, z_far=5.0):
-    E, mask = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, threshold=1.0, prob=0.999)
+    E, _ = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, threshold=1.0, prob=0.999)
     
     _, R, t, _ = cv2.recoverPose(E, points1, points2, K)
 
@@ -239,48 +279,104 @@ def compute_pose(points1, points2, K, z_near=0.0, z_far=5.0):
     print("No sol.")
     return np.eye(3), np.zeros((3, 1))
 
-def transform_point_in_dict(point_data, R, t):
-
-    image_x_list = point_data['Image_X']
-    image_y_list = point_data['Image_Y']
-
-    transformed_x = []
-    transformed_y = []
-
-    for x,y in zip(image_x_list,image_y_list):
-        point_3d = np.array([x,y,0.0])
-        transformed_point = (R @ point_3d + t).flatten()
-
-        transformed_x.append(transformed_point[0])
-        transformed_y.append(transformed_point[1])
-
-    point_data['Image_X'] = transformed_x
-    point_data['Image_Y'] = transformed_y
-
-    return point_data
-
-def rotation_from_vector(w):
-    theta = np.linalg.norm(w) 
+def project_point(world_point, camera_matrix, width=640, height=480, z_near=0, z_far=5):
+    status = True 
+    image_point = np.zeros((2,))
     
-    if theta == 0:
-        return np.eye(3)
+    if world_point[2] <= z_near or world_point[2] >= z_far:
+        #print("Point out of camera view")
+        status = False
     
-    w_hat = w / theta
+    projected_point = camera_matrix @ world_point
     
-    K = np.array([
-        [0, -w_hat[2], w_hat[1]],
-        [w_hat[2], 0, -w_hat[0]],
-        [-w_hat[1], w_hat[0], 0]
+    if np.isclose(projected_point[2], 0):
+        #print("Points close to zero")
+        status = False
+        return image_point, status
+    
+    image_point[:] = projected_point[:2] / projected_point[2]
+
+    if image_point[0] < 0 or image_point[0] > width-1: 
+        #print("Point out of image")
+        status = False 
+    if image_point[1] < 0 or image_point[1] > height-1:
+        #print("Point out of image")
+        status = False 
+
+    return image_point, status 
+
+def skew(vector):
+    return np.array([
+        [0, -vector[2], vector[1]],
+        [vector[2], 0, -vector[0]],
+        [-vector[1], vector[0], 0]
     ])
+
+def error_and_jacobian(world_point, reference_image_point, K):
+    status = True
+    predicted_image_point, is_true = project_point(world_point,
+                                                    K)
     
-    R = np.eye(3) + np.sin(theta) * K + (1 - np.cos(theta)) * (K @ K)
-    return R
+    if(is_true == False):
+       #print("No good proj")
+       status = False
+    
+    error = predicted_image_point - reference_image_point
 
+    J_r = np.zeros((3,6))
+    J_r[:3, :3] = np.eye(3)
+    J_r[:3, 3:] = skew(world_point)
 
-def update_pose(R, t, delta_pose):
-    delta_R = rotation_from_vector(delta_pose[:3])
-    delta_t = delta_pose[3:].reshape(3,1)
+    phom = K @ world_point
+    
+    if np.isclose(phom[2], 0):
+        #print("phom close to zero")
+        status = False 
+    
+    iz = 1.0 / phom[2]
+    iz2 = iz * iz 
 
-    R = delta_R @ R 
-    t = t + delta_t
-    return R, t
+    J_p = np.array([
+        [iz, 0, -phom[0]*iz2],
+        [0, iz, -phom[1]*iz2]
+    ])
+
+    J = J_p @ K @ J_r
+
+    return error, J, status
+
+def linearize(assoc, world_points, reference_image_points, K, kernel_threshold=100):
+    status_lin = True
+    H = np.zeros((6,6))
+    b = np.zeros(6)
+
+    for idx_frame1, idx_frame2 in assoc: 
+        if idx_frame1 >= len(reference_image_points) or idx_frame2 >= len(world_points):
+            continue  
+        
+        error, J, status = error_and_jacobian(world_points[idx_frame1], 
+                                              reference_image_points[idx_frame2], 
+                                              K)
+
+        if status == False:
+            #print("Status jacobian false")
+            status_lin = False
+            continue
+
+        chi = np.dot(error,error)
+        lambda_factor = 1.0 
+
+        if chi > kernel_threshold: 
+            lambda_factor = np.sqrt(kernel_threshold / chi)
+
+        H += J.T @ J * lambda_factor
+        b += J.T @ error * lambda_factor
+
+    return H, b, status_lin
+
+def solve(H, b): 
+    try: 
+        dx = np.linalg.solve(H, -b)
+    except:
+        dx = np.zeros_like(b)
+    return dx

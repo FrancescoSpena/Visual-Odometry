@@ -6,11 +6,18 @@ import rerun as rr
 
 if __name__ == "__main__":
     v = vo.VisualOdometry()
-    R, t, _, status = v.init()
-
+    R, t, status = v.init()
+    print("Init (with frame 0 and 1)")
     print(f"Status init: {status}")
-    print("Estimation...")
-    for i in range(1,120):
-        R, t = v.run(i)
-    
-    print("Estimation complete.")
+
+    for i in range(1,10):
+        R, t, status = v.run(i)
+        print(f"from frame {i} to {i+1}")
+        if status == True:
+            print(f"R:\n {R}")
+            print(f"t:\n {t}")
+            print(f"delta:\n {v.dx}")
+            print("========")
+        else:
+            print("No solution found.")
+            print("========")
