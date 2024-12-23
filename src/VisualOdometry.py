@@ -39,7 +39,7 @@ class VisualOdometry():
                                         self.K)
         
         #3D points of the frame 0
-        self.points3d = u.triangulate(self.R,
+        self.points3d_prev = u.triangulate(self.R,
                                       self.t,
                                       points0,
                                       points1,
@@ -55,39 +55,7 @@ class VisualOdometry():
     
     def run(self, idx):
         'Update pose in the frame idx+1'
-        path_curr_frame = u.generate_path(idx)
-        path_next_frame = u.generate_path(idx+1)
+        pass
 
-        data_curr_frame = u.extract_measurements(path_curr_frame)
-        data_next_frame = u.extract_measurements(path_next_frame)
 
-        #Data associtation -> points frame idx, points frame idx+1, assoc=(idx, best_idx+1)
-        points_curr, points_next, assoc = u.data_association(data_curr_frame,
-                                                             data_next_frame)
-        
-        #World points in the next frame idx+1
-        world_points = u.triangulate(self.R_rel,
-                                     self.t_rel,
-                                     points_next,
-                                     points_curr,
-                                     self.K)
-        
-        #Linearize 
-        H, b = u.linearize(assoc,
-                           world_points,
-                           points_next,
-                           self.K)
-        
-        #Compute delta (solve LS problem)
-        self.dx = u.solve(H, b)
-
-        #Update pose (from 0 to idx+1)(boxplus operator)
-        T_curr = u.m2T(self.R, self.t)      #frame 0 to idx
-        T = u.v2T(self.dx) @ T_curr         #frame 0 to idx+1
-        T_rel = np.linalg.inv(T_curr) @ T 
-
-        self.R_rel, self.t_rel = u.T2m(T_rel)
-        self.R, self.t = u.T2m(T)
-
-        return self.R, self.t
         

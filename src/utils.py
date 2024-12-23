@@ -288,12 +288,6 @@ def project_point(world_point, camera_matrix, width=640, height=480, z_near=0, z
         status = False
     
     projected_point = camera_matrix @ world_point
-    
-    if np.isclose(projected_point[2], 0):
-        #print("Points close to zero")
-        status = False
-        return image_point, status
-    
     image_point[:] = projected_point[:2] / projected_point[2]
 
     if image_point[0] < 0 or image_point[0] > width-1: 
@@ -340,7 +334,6 @@ def error_and_jacobian(world_point, reference_image_point, K):
     return error, J, status
 
 def linearize(assoc, world_points, reference_image_points, K, kernel_threshold=100):
-    status_lin = True
     H = np.zeros((6,6))
     b = np.zeros(6)
 
