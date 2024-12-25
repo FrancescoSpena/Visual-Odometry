@@ -233,7 +233,7 @@ def data_association(first_data, second_data, threshold=0.2):
     
     return points_first, points_second, associations
 
-def triangulate(R, t, points1, points2, K):
+def triangulate(R, t, points1, points2, K, assoc):
     P1 = K @ np.hstack((np.eye(3), np.zeros((3, 1))))
     P2 = K @ np.hstack((R, t))
 
@@ -244,7 +244,9 @@ def triangulate(R, t, points1, points2, K):
     points3D_hom = points4D / points4D[3]  
     points3D = points3D_hom[:3].T  
 
-    return points3D
+    points3D_with_indices = [(assoc[idx][0], points3D[idx]) for idx in range(len(points3D))]
+
+    return points3D_with_indices
 
 def compute_pose(points1, points2, K, z_near=0.0, z_far=5.0):
     E, _ = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, threshold=1.0, prob=0.999)
@@ -299,6 +301,19 @@ def project_point(world_point, camera_matrix, width=640, height=480, z_near=0, z
 
     return image_point, status 
 
+def update_point(vector, target_idx, new_point):
+    for i in range(len(vector)):
+        if vector[i][0] == target_idx:
+            vector[i] = (vector[i][0], new_point)
+            return True 
+    return False
+
+def get_point(vector, target_idx):
+    for idx, point in vector: 
+        if idx == target_idx:
+            return point
+    return None
+
 def skew(vector):
     return np.array([
         [0, -vector[2], vector[1]],
@@ -341,7 +356,7 @@ def linearize(assoc, world_points, reference_image_points, K, kernel_threshold=1
         if idx_frame1 >= len(reference_image_points) or idx_frame2 >= len(world_points):
             continue  
         
-        error, J, status = error_and_jacobian(world_points[idx_frame1], 
+        error, J, status = error_and_jacobian(get_point(world_points,idx_frame2), 
                                               reference_image_points[idx_frame2], 
                                               K)
 

@@ -30,7 +30,7 @@ class VisualOdometry():
         data_frame_1 = u.extract_measurements(path1)
 
         #points0: frame 0, points1: frame1 
-        points0, points1, _ = u.data_association(data_frame_0, 
+        points0, points1, assoc = u.data_association(data_frame_0, 
                                               data_frame_1)
         
         #Pose from 0 to 1
@@ -39,11 +39,12 @@ class VisualOdometry():
                                         self.K)
         
         #3D points of the frame 0
-        self.points3d_prev = u.triangulate(self.R,
+        self.points_3d_curr = u.triangulate(self.R,
                                       self.t,
                                       points0,
                                       points1,
-                                      self.K)
+                                      self.K,
+                                      assoc)
         
         self.R_rel = self.R 
         self.t_rel = self.t
@@ -55,7 +56,59 @@ class VisualOdometry():
     
     def run(self, idx):
         'Update pose in the frame idx+1'
-        pass
+        path_curr_frame = u.generate_path(idx)
+        path_next_frame = u.generate_path(idx+1)
+
+        data_curr = u.extract_measurements(path_curr_frame)
+        data_next = u.extract_measurements(path_next_frame)
+
+        points_curr, points_next, assoc = u.data_association(data_curr,
+                                                             data_next)
+        
+        world_curr_frame = u.triangulate(self.R,
+                                         self.t,
+                                         points_curr,
+                                         points_next,
+                                         self.K,
+                                         assoc)
+        
+
+        world_next_frame = []
+
+        for curr, next in assoc: 
+            point = u.get_point(world_curr_frame,curr)
+            if point is not None:
+                new_tuple = (next, u.get_point(world_curr_frame,curr))
+                world_next_frame.append(new_tuple)
+            else:
+                print("Not exist.")
+
+        for curr, next in assoc:
+            print(f"Point ID {curr} -> Point ID {next}")
+            print(f"idx: {curr}, 3d point curr: {u.get_point(world_curr_frame,curr)}")
+            print(f"idx: {next}, 3d point next: {u.get_point(world_next_frame,next)}")
+            print("=======")
+
+        # #Linearize the sys
+        # H, b = u.linearize(assoc,
+        #                    world_next_frame,
+        #                    points_next,
+        #                    self.K)
+        
+        # #Compute delta_pose (solve LS problem)
+        # dx = u.solve(H, b)
+
+        # #Update pose (boxplus operator)
+        # T_curr = u.m2T(self.R, self.t)      #pose from 0 to idx 
+        # T = u.v2T(dx) @ T_curr              #apply boxplus operator --> update pose (from 0 to idx+1)
+        # T_rel = np.linalg.inv(T_curr) @ T 
+
+        # self.R_rel, self.t_rel = u.T2m(T_rel)
+        # self.R, self.t = u.T2m(T)
+
+        return self.R_rel, self.t_rel
+            
+        
 
 
         
