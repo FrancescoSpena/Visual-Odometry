@@ -9,8 +9,9 @@ if __name__ == "__main__":
     R, t, status = v.init()
     print(f"Status init: {status}")
 
-    for i in range(1,3):
+    for i in range(1,10):
         R, t = v.run(i)
+        print(f"from frame {i} to {i+1}")
         print(f"R:\n {R}")
         print(f"t:\n {t}")
         print("========")

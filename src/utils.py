@@ -221,16 +221,10 @@ def data_association(first_data, second_data, threshold=0.2):
     #     print(f"  Appearance Features 2:\n {second_data['Appearance_Features'][j]}")
     #     print("==================")
     
-    points_first = np.array([
-        [first_data['Image_X'][i], first_data['Image_Y'][i]]
-        for i, _ in associations
-    ])
-    
-    points_second = np.array([
-        [second_data['Image_X'][j], second_data['Image_Y'][j]]
-        for _, j in associations
-    ])
-    
+    points_first = [(i, np.array([first_data['Image_X'][i], first_data['Image_Y'][i]])) for i, _ in associations]
+    points_second = [(j, np.array([second_data['Image_X'][j], second_data['Image_Y'][j]])) for _, j in associations]
+
+
     return points_first, points_second, associations
 
 def triangulate(R, t, points1, points2, K, assoc):
@@ -282,21 +276,22 @@ def compute_pose(points1, points2, K, z_near=0.0, z_far=5.0):
     return np.eye(3), np.zeros((3, 1))
 
 def project_point(world_point, camera_matrix, width=640, height=480, z_near=0, z_far=5):
+    #print("         Project point:")
     status = True 
     image_point = np.zeros((2,))
     
-    if world_point[2] <= z_near or world_point[2] >= z_far:
-        #print("Point out of camera view")
+    if world_point[2] <= z_near:
+        #print(f"Point out of camera view, z: {world_point[2]}")
         status = False
     
     projected_point = camera_matrix @ world_point
     image_point[:] = projected_point[:2] / projected_point[2]
 
     if image_point[0] < 0 or image_point[0] > width-1: 
-        #print("Point out of image")
+        #print(f"Point out of image, x: {image_point[0]}")
         status = False 
     if image_point[1] < 0 or image_point[1] > height-1:
-        #print("Point out of image")
+        #print(f"Point out of image, y: {image_point[1]}")
         status = False 
 
     return image_point, status 
@@ -322,11 +317,13 @@ def skew(vector):
     ])
 
 def error_and_jacobian(world_point, reference_image_point, K):
+    #print("     Jacobian:")
     status = True
     predicted_image_point, is_true = project_point(world_point,
                                                     K)
     
     if(is_true == False):
+       #print("No good proj")
        status = False
     
     error = predicted_image_point - reference_image_point
@@ -349,15 +346,16 @@ def error_and_jacobian(world_point, reference_image_point, K):
     return error, J, status
 
 def linearize(assoc, world_points, reference_image_points, K, kernel_threshold=100):
+    #print("Linearize:")
     H = np.zeros((6,6))
     b = np.zeros(6)
 
-    for idx_frame1, idx_frame2 in assoc: 
-        if idx_frame1 >= len(reference_image_points) or idx_frame2 >= len(world_points):
-            continue  
+    for _, idx_frame2 in assoc: 
         
+        #print("****************")
+        #print(f"Point ID: {idx_frame2}")
         error, J, status = error_and_jacobian(get_point(world_points,idx_frame2), 
-                                              reference_image_points[idx_frame2], 
+                                              get_point(reference_image_points,idx_frame2), 
                                               K)
 
         if status == False:
@@ -372,6 +370,7 @@ def linearize(assoc, world_points, reference_image_points, K, kernel_threshold=1
         H += J.T @ J * lambda_factor
         b += J.T @ error * lambda_factor
 
+    #print("************")
     return H, b
 
 def solve(H, b): 

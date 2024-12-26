@@ -33,16 +33,20 @@ class VisualOdometry():
         points0, points1, assoc = u.data_association(data_frame_0, 
                                               data_frame_1)
         
+
+        p_0 = np.array([item[1] for item in points0])
+        p_1 = np.array([item[1] for item in points1])
+
         #Pose from 0 to 1
-        self.R, self.t = u.compute_pose(points0,
-                                        points1,
+        self.R, self.t = u.compute_pose(p_0,
+                                        p_1,
                                         self.K)
         
         #3D points of the frame 0
         self.points_3d_curr = u.triangulate(self.R,
                                       self.t,
-                                      points0,
-                                      points1,
+                                      p_0,
+                                      p_1,
                                       self.K,
                                       assoc)
         
@@ -65,46 +69,53 @@ class VisualOdometry():
         points_curr, points_next, assoc = u.data_association(data_curr,
                                                              data_next)
         
+        p_curr = np.array([item[1] for item in points_curr])
+        p_next = np.array([item[1] for item in points_next])
+        
         world_curr_frame = u.triangulate(self.R,
                                          self.t,
-                                         points_curr,
-                                         points_next,
+                                         p_curr,
+                                         p_next,
                                          self.K,
                                          assoc)
         
-
+        #Obtain the world points in the frame idx+1
         world_next_frame = []
-
         for curr, next in assoc: 
             point = u.get_point(world_curr_frame,curr)
             if point is not None:
                 new_tuple = (next, u.get_point(world_curr_frame,curr))
                 world_next_frame.append(new_tuple)
-            else:
-                print("Not exist.")
 
-        for curr, next in assoc:
-            print(f"Point ID {curr} -> Point ID {next}")
-            print(f"idx: {curr}, 3d point curr: {u.get_point(world_curr_frame,curr)}")
-            print(f"idx: {next}, 3d point next: {u.get_point(world_next_frame,next)}")
-            print("=======")
+        # for curr, next in assoc:
+        #     print(f"Point ID {curr} -> Point ID {next}")
+        #     print(f"idx: {curr}, 3d point curr: {u.get_point(world_curr_frame,curr)}")
+        #     print(f"idx: {next}, 3d point next: {u.get_point(world_next_frame,next)}")
+        #     print(f"idx: {curr}, 2d point curr: {u.get_point(points_curr,curr)}")
+        #     print(f"idx: {next}, 2d point next: {u.get_point(points_next,next)}")
+        #     print("=======")
 
-        # #Linearize the sys
-        # H, b = u.linearize(assoc,
-        #                    world_next_frame,
-        #                    points_next,
-        #                    self.K)
+        #Linearize the sys
+        H, b = u.linearize(assoc,
+                           world_next_frame,
+                           points_next,
+                           self.K)
         
-        # #Compute delta_pose (solve LS problem)
-        # dx = u.solve(H, b)
+        print("Linearization:")
+        print(f"H: {H}")
+        print(f"b: {b}")
+        print("****************")
+        
+        #Compute delta_pose (solve LS problem)
+        dx = u.solve(H, b)
 
-        # #Update pose (boxplus operator)
-        # T_curr = u.m2T(self.R, self.t)      #pose from 0 to idx 
-        # T = u.v2T(dx) @ T_curr              #apply boxplus operator --> update pose (from 0 to idx+1)
-        # T_rel = np.linalg.inv(T_curr) @ T 
+        #Update pose (boxplus operator)
+        T_curr = u.m2T(self.R, self.t)      #pose from 0 to idx 
+        T = u.v2T(dx) @ T_curr              #apply boxplus operator --> update pose (from 0 to idx+1)
+        T_rel = np.linalg.inv(T_curr) @ T 
 
-        # self.R_rel, self.t_rel = u.T2m(T_rel)
-        # self.R, self.t = u.T2m(T)
+        self.R_rel, self.t_rel = u.T2m(T_rel)
+        self.R, self.t = u.T2m(T)
 
         return self.R_rel, self.t_rel
             
