@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 
 class VisualOdometry():
     def __init__(self, camera_path='../data/camera.dat'):
+        self.traj = u.read_traj()
+
         self.camera_info = u.extract_camera_data(camera_path)
         self.K = self.camera_info['camera_matrix']
         self.width = self.camera_info['width']
@@ -12,11 +14,11 @@ class VisualOdometry():
         self.z_near = self.camera_info['z_near']
         self.z_far = self.camera_info['z_far']
         
-        #Absolute matrix (from 0 to idx+1)
+        #(from 0 to idx+1)
         self.R = np.eye(3)
         self.t = np.zeros((3,1))
         
-        #Relative matrix (from idx to idx+1)
+        #(from idx to idx+1)
         self.R_rel = np.eye(3)
         self.t_rel = np.zeros((3,1))
         
@@ -29,7 +31,7 @@ class VisualOdometry():
         data_frame_0 = u.extract_measurements(path0)
         data_frame_1 = u.extract_measurements(path1)
 
-        #points0: frame 0, points1: frame1 
+        #points0: frame 0, points1: frame1 --> (ID, (X,Y))
         points0, points1, assoc = u.data_association(data_frame_0, 
                                               data_frame_1)
         
@@ -43,23 +45,35 @@ class VisualOdometry():
                                         self.K)
         
         #3D points of the frame 0
-        self.points_3d_curr = u.triangulate(self.R,
+        self.points_3d_init = u.triangulate(self.R,
                                       self.t,
                                       p_0,
                                       p_1,
                                       self.K,
                                       assoc)
         
+        #Compute scale
+        gt_0 = np.array(self.traj[0])
+        gt_1 = np.array(self.traj[1])
+
+        gt_dist = np.linalg.norm(gt_1 - gt_0)
+        vo_dist = np.linalg.norm(self.t)
+
+        #Apply scale
+        self.scale = gt_dist/vo_dist
+        self.t *= self.scale
+        
+        #Check
         self.R_rel = self.R 
         self.t_rel = self.t
         
         if(np.linalg.det(self.R) != 1 or np.linalg.norm(self.t) == 0):
             self.status = False
         
-        return self.R, self.t, self.status
+        return self.R, self.t, self.scale, self.points_3d_init, self.status
     
     def run(self, idx):
-        'Update pose in the frame idx+1'
+        'Update pose, return R_abs, t_abs, R_rel, t_rel, 3d points'
         path_curr_frame = u.generate_path(idx)
         path_next_frame = u.generate_path(idx+1)
 
@@ -101,10 +115,10 @@ class VisualOdometry():
                            points_next,
                            self.K)
         
-        print("Linearization:")
-        print(f"H: {H}")
-        print(f"b: {b}")
-        print("****************")
+        # print("Linearization:")
+        # print(f"H: {H}")
+        # print(f"b: {b}")
+        # print("****************")
         
         #Compute delta_pose (solve LS problem)
         dx = u.solve(H, b)
@@ -117,7 +131,7 @@ class VisualOdometry():
         self.R_rel, self.t_rel = u.T2m(T_rel)
         self.R, self.t = u.T2m(T)
 
-        return self.R_rel, self.t_rel
+        return self.R, self.t, self.R_rel, self.t_rel, world_next_frame
             
         
 

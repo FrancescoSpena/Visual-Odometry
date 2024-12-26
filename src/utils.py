@@ -227,7 +227,18 @@ def data_association(first_data, second_data, threshold=0.2):
 
     return points_first, points_second, associations
 
+def read_traj(path='../data/trajectory.dat'):
+    gt = []
+    with open(path, 'r') as file: 
+        for line in file: 
+            if line.strip() and not line.startswith('#'):
+                elements = line.split()
+                gt_pose = list(map(float, elements[4:7]))  # [x, y, z]
+                gt.append(gt_pose)
+    return gt
+
 def triangulate(R, t, points1, points2, K, assoc):
+    'Return a list of 3d points (ID, (X, Y, Z))'
     P1 = K @ np.hstack((np.eye(3), np.zeros((3, 1))))
     P2 = K @ np.hstack((R, t))
 
