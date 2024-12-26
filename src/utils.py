@@ -9,6 +9,7 @@ from scipy.spatial import KDTree
 
 
 def extract_measurements(file_path):
+    'Read measurements file'
     point_data = []
     pattern = re.compile(r'point\s+(\d+)\s+(\d+)\s+([\d.]+)\s+([\d.]+)\s+(.+)')
 
@@ -42,6 +43,7 @@ def extract_measurements(file_path):
     }
 
 def extract_other_info(file_path):
+    'Read other file'
     sequences = []
     ground_truths = []
     odometry_poses = []
@@ -71,9 +73,11 @@ def extract_other_info(file_path):
     }
 
 def generate_path(id):
+    'Generate path_measurements from ID'
     return f"../data/meas-{id:05d}.dat"
 
 def extract_camera_data(file_path):
+    'Read camera file'
     camera_matrix = []
     cam_transform = []
     z_near, z_far = None, None
@@ -127,19 +131,8 @@ def extract_camera_data(file_path):
         "height": height
     }
 
-def read_traj(trajectory_path):
-    ground_truths = []
-
-    with open(trajectory_path, 'r') as file:
-        for line in file:
-            values = line.strip().split()
-            if len(values) >= 7:
-                x, y, z = map(float, values[4:7])
-                ground_truths.append((x, y, z))
-    
-    return ground_truths
-
 def m2T(R, t):
+    'From R,t to homogeneous transformation'
     t = t.reshape(3,1)
     T = np.eye(4)
     T[:3, :3] = R 
@@ -147,16 +140,19 @@ def m2T(R, t):
     return T
 
 def gt2T(gt):
+    'gt to homogeneous transformation'
     T = np.eye(4)
     T[:3, 3] = gt 
     return T
 
 def T2m(T):
+    'From homogeneous transformation to R, t'
     R = T[:3, :3]
     t = T[:3, 3].reshape(3,1)
     return R, t
 
 def v2T(v):
+    'From vector to homogeneous transformation'
     def Rx(roll):
         return np.array([
             [1, 0, 0],
@@ -186,6 +182,7 @@ def v2T(v):
     return T
 
 def plot_match(points1, points2):
+    'Plot points'
     import matplotlib.pyplot as plt
     plt.figure()
     plt.scatter(points1[:, 0], points1[:, 1], label="Frame 1")
@@ -195,6 +192,7 @@ def plot_match(points1, points2):
     plt.show()
 
 def data_association(first_data, second_data, threshold=0.2):
+    'Perform data association, return point1 = (ID, (X,Y)), point2 = (ID, (X,Y)), assoc = (ID, best_ID)'
     associations = []
     
     for i, actual_id1 in enumerate(first_data['Actual_IDs']):
@@ -228,6 +226,7 @@ def data_association(first_data, second_data, threshold=0.2):
     return points_first, points_second, associations
 
 def read_traj(path='../data/trajectory.dat'):
+    'Read the trajectory file'
     gt = []
     with open(path, 'r') as file: 
         for line in file: 
@@ -254,6 +253,7 @@ def triangulate(R, t, points1, points2, K, assoc):
     return points3D_with_indices
 
 def compute_pose(points1, points2, K, z_near=0.0, z_far=5.0):
+    'Compute E -> Pose'
     E, _ = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, threshold=1.0, prob=0.999)
     
     _, R, t, _ = cv2.recoverPose(E, points1, points2, K)
@@ -286,7 +286,8 @@ def compute_pose(points1, points2, K, z_near=0.0, z_far=5.0):
     print("No sol.")
     return np.eye(3), np.zeros((3, 1))
 
-def project_point(world_point, camera_matrix, width=640, height=480, z_near=0, z_far=5):
+def project_point(world_point, camera_matrix, width=640, height=480, z_near=0, z_far=50):
+    'Project a 3D point into image'
     #print("         Project point:")
     status = True 
     image_point = np.zeros((2,))
@@ -308,6 +309,7 @@ def project_point(world_point, camera_matrix, width=640, height=480, z_near=0, z
     return image_point, status 
 
 def update_point(vector, target_idx, new_point):
+    'Update point with ID=target_idx'
     for i in range(len(vector)):
         if vector[i][0] == target_idx:
             vector[i] = (vector[i][0], new_point)
@@ -315,12 +317,14 @@ def update_point(vector, target_idx, new_point):
     return False
 
 def get_point(vector, target_idx):
+    'Return the point with the ID=target_idx'
     for idx, point in vector: 
         if idx == target_idx:
             return point
     return None
 
 def skew(vector):
+    'Convert a vector in a skew-symmetric matrix'
     return np.array([
         [0, -vector[2], vector[1]],
         [vector[2], 0, -vector[0]],
@@ -328,6 +332,7 @@ def skew(vector):
     ])
 
 def error_and_jacobian(world_point, reference_image_point, K):
+    'Compute error and jacobian given the 3D points, 2D points and the camera_matrix'
     #print("     Jacobian:")
     status = True
     predicted_image_point, is_true = project_point(world_point,
@@ -357,7 +362,7 @@ def error_and_jacobian(world_point, reference_image_point, K):
     return error, J, status
 
 def linearize(assoc, world_points, reference_image_points, K, kernel_threshold=100):
-    #print("Linearize:")
+    'Linearize the system and return H and b'
     H = np.zeros((6,6))
     b = np.zeros(6)
 
@@ -381,10 +386,10 @@ def linearize(assoc, world_points, reference_image_points, K, kernel_threshold=1
         H += J.T @ J * lambda_factor
         b += J.T @ error * lambda_factor
 
-    #print("************")
     return H, b
 
 def solve(H, b): 
+    'Solve a LS problem Ax = b'
     try: 
         dx = np.linalg.solve(H, -b)
     except:
