@@ -4,10 +4,10 @@ import VisualOdometry as vo
 import utils as u
 import rerun as rr
 
-def visualize_poses(gt_poses, estimated_poses):
+def visualize_poses(gt_points, estimated_points):
     rr.init("pose_visualization", spawn=True)
-    rr.log("estimated_trajectory", rr.Points3D(estimated_poses, colors=(255, 0, 0), radii=0.02))
-    rr.log("ground_truth_trajectory", rr.Points3D(gt_poses, colors=(0, 255, 0), radii=0.02))
+    rr.log("estimated_trajectory", rr.Points3D(estimated_points, colors=(255, 0, 0), radii=0.02))
+    rr.log("ground_truth_trajectory", rr.Points3D(gt_points, colors=(0, 255, 0), radii=0.02))
 
 def evaluate(T_curr, T_next, T_gt_curr, T_gt_next):
     rel_T = np.linalg.inv(T_curr) @ T_next
@@ -17,40 +17,50 @@ def evaluate(T_curr, T_next, T_gt_curr, T_gt_next):
     t_part = np.linalg.norm(rel_T[0:3, 3]) / np.linalg.norm(rel_gt[0:3, 3])
 
     print(f"rotation: {int(rot_part)}")
-    print(f"translation: {t_part}")
+    print(f"translation: {int(t_part)}")
     print("======")
 
 
 if __name__ == "__main__":
-    v = vo.VisualOdometry()
-    estimated = []
-    R, t, scale, points_3d, status = v.init()
-    estimated.append((R,t))
+    gt = u.read_traj()
+    estimated_pose = []
 
-    # print(f"R: {R}")
-    # print(f"t: {t}")
-    # print(f"scale: {scale}")
-    # print(f"first point 3D: {points_3d[0]}")
+    v = vo.VisualOdometry()
+    T, points_3d, status = v.init()
+    estimated_pose.append(T)
+
     print(f"Status init: {status}")
 
-    gt = v.traj
-    
+    iter = 100
+    for i in range(1, iter):
+        v.run(i)
+        print(f"Update to frame {i}")
+        T = v.cam.relative_pose()
+        R, t = u.T2m(T)
 
-    for i in range(1, 10):
-        R, t, R_rel, t_rel, _ = v.run(i)
-        estimated.append((R_rel,t_rel))
-    
-    print("Starting evaluation...")
-    for i in range(len(estimated)-1):
-        T_curr = u.m2T(estimated[i][0], estimated[i][1])
-        T_next = u.m2T(estimated[i+1][0], estimated[i+1][1])
+        path_curr_gt = u.generate_path(i)
+        path_next_gt = u.generate_path(i+1)
+        info_gt = u.extract_other_info(path_curr_gt)
+        info_gt_next = u.extract_other_info(path_next_gt)
+
+        gt_0 = np.array(info_gt['Ground_Truths'])
+        gt_1 = np.array(info_gt_next['Ground_Truths'])
+
+        gt_dist = np.linalg.norm(gt_1 - gt_0)
+        vo_dist = np.linalg.norm(t)
+        scale = gt_dist / vo_dist
+
+        t *= scale
+        T = u.m2T(R, t)
+        estimated_pose.append(T)
+
+
+    print("Evaluation...")
+    for i in range(0,iter-1):
+        T_curr = estimated_pose[i]
+        T_next = estimated_pose[i+1]
         T_gt_curr = u.gt2T(gt[i])
         T_gt_next = u.gt2T(gt[i+1])
-
-        # print(f"T_curr: {T_curr}")
-        # print(f"T_next: {T_curr}")
-        # print(f"T_gt_curr: {T_gt_curr}")
-        # print(f"T_gt_next: {T_gt_next}")
-
         evaluate(T_curr, T_next, T_gt_curr, T_gt_next)
+
 

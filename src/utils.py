@@ -184,9 +184,25 @@ def v2T(v):
 def plot_match(points1, points2):
     'Plot points'
     import matplotlib.pyplot as plt
+    
+    # Extract 2D points and IDs from (id, point_2d)
+    points1_2d = np.array([p[1] for p in points1])
+    points2_2d = np.array([p[1] for p in points2])
+    ids1 = [p[0] for p in points1]
+    ids2 = [p[0] for p in points2]
+
     plt.figure()
-    plt.scatter(points1[:, 0], points1[:, 1], label="Frame 1")
-    plt.scatter(points2[:, 0], points2[:, 1], label="Frame 2")
+    plt.scatter(points1_2d[:, 0], points1_2d[:, 1], label="Frame 1")
+    plt.scatter(points2_2d[:, 0], points2_2d[:, 1], label="Frame 2")
+
+    # Annotate IDs for Frame 1
+    for i, txt in enumerate(ids1):
+        plt.annotate(txt, (points1_2d[i, 0], points1_2d[i, 1]), fontsize=8, color='blue')
+
+    # Annotate IDs for Frame 2
+    for i, txt in enumerate(ids2):
+        plt.annotate(txt, (points2_2d[i, 0], points2_2d[i, 1]), fontsize=8, color='orange')
+
     plt.legend()
     plt.title("Matched Points")
     plt.show()
@@ -252,58 +268,71 @@ def triangulate(R, t, points1, points2, K, assoc):
 
     return points3D_with_indices
 
-def compute_pose(points1, points2, K, z_near=0.0, z_far=5.0):
+def compute_pose(points1, points2, K, diff_gt, z_near=0.0, z_far=5.0):
     'Compute E -> Pose'
-    E, _ = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, threshold=1.0, prob=0.999)
+    E, mask = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, threshold=1.0, prob=0.999)
     
+    # print("Essential Matrix E:\n", E)
+    # u, s, vt = np.linalg.svd(E)
+    # print("Singular values of E:", s)
+
+    # parallax = np.linalg.norm(points1 - points2, axis=1)
+    # print("Mean Parallax:", np.mean(parallax))
+
+    #Filter the outliers
+    points1 = points1[mask.ravel() == 1]
+    points2 = points2[mask.ravel() == 1]
+
     _, R, t, _ = cv2.recoverPose(E, points1, points2, K)
 
-    def triangulate_and_check(R, t, points1, points2, K, z_near=0.0, z_far=5.0):
+    def triangulate_and_check(R, t, points1, points2, K, z_near=0.0, z_far=5.2):
         P1 = K @ np.hstack((np.eye(3), np.zeros((3, 1))))
         P2 = K @ np.hstack((R, t))
         
         points1_hom = points1.T  # Shape: (2, N)
         points2_hom = points2.T  # Shape: (2, N)
         points4D = cv2.triangulatePoints(P1, P2, points1_hom, points2_hom)
-        points3D = points4D / points4D[3]  # (x, y, z, 1)
+        points3D = points4D / points4D[3]  # (x, y, z)
         
         z_values = points3D[2]
-        
+
         cheirality_check = np.all(z_values > 0)
-        depth_check = np.all((z_values >= z_near) & (z_values <= z_far))
-        
+        tolerance = 1e-2
+        depth_check = np.all((z_values >= z_near) & (z_values <= z_far + tolerance))
+
         return cheirality_check and depth_check
 
     poss_sol = [(R, t), (R, -t), (R.T, t), (R.T, -t)]
     
     for i, (R_candidate, t_candidate) in enumerate(poss_sol):
-        scale_factor = 0.01  
-        t_scaled = t_candidate * scale_factor
+        vo_dist = np.linalg.norm(t_candidate)
+        scale = diff_gt / vo_dist
+        t_candidate *= scale
 
-        if triangulate_and_check(R_candidate, t_scaled, points1, points2, K, z_near, z_far):
+        if triangulate_and_check(R_candidate, t_candidate, points1, points2, K, z_near, z_far):
             return R_candidate, t_candidate
 
     print("No sol.")
     return np.eye(3), np.zeros((3, 1))
 
-def project_point(world_point, camera_matrix, width=640, height=480, z_near=0, z_far=50):
+def project_point(world_point, camera_matrix, width=640, height=480, z_near=0, z_far=5):
     'Project a 3D point into image'
-    #print("         Project point:")
     status = True 
     image_point = np.zeros((2,))
+    tolerance = 1e-2
     
-    if world_point[2] <= z_near:
-        #print(f"Point out of camera view, z: {world_point[2]}")
+    if world_point[2] <= z_near or world_point[2] > z_far + tolerance:
+        print(f"Point out of camera view, z: {world_point[2]}")
         status = False
     
     projected_point = camera_matrix @ world_point
     image_point[:] = projected_point[:2] / projected_point[2]
 
     if image_point[0] < 0 or image_point[0] > width-1: 
-        #print(f"Point out of image, x: {image_point[0]}")
+        print(f"Point out of image, x: {image_point[0]}")
         status = False 
     if image_point[1] < 0 or image_point[1] > height-1:
-        #print(f"Point out of image, y: {image_point[1]}")
+        print(f"Point out of image, y: {image_point[1]}")
         status = False 
 
     return image_point, status 
@@ -330,68 +359,3 @@ def skew(vector):
         [vector[2], 0, -vector[0]],
         [-vector[1], vector[0], 0]
     ])
-
-def error_and_jacobian(world_point, reference_image_point, K):
-    'Compute error and jacobian given the 3D points, 2D points and the camera_matrix'
-    #print("     Jacobian:")
-    status = True
-    predicted_image_point, is_true = project_point(world_point,
-                                                    K)
-    
-    if(is_true == False):
-       #print("No good proj")
-       status = False
-    
-    error = predicted_image_point - reference_image_point
-
-    J_r = np.zeros((3,6))
-    J_r[:3, :3] = np.eye(3)
-    J_r[:3, 3:] = skew(world_point)
-
-    phom = K @ world_point
-    iz = 1.0 / phom[2]
-    iz2 = iz * iz 
-
-    J_p = np.array([
-        [iz, 0, -phom[0]*iz2],
-        [0, iz, -phom[1]*iz2]
-    ])
-
-    J = J_p @ K @ J_r
-
-    return error, J, status
-
-def linearize(assoc, world_points, reference_image_points, K, kernel_threshold=100):
-    'Linearize the system and return H and b'
-    H = np.zeros((6,6))
-    b = np.zeros(6)
-
-    for _, idx_frame2 in assoc: 
-        
-        #print("****************")
-        #print(f"Point ID: {idx_frame2}")
-        error, J, status = error_and_jacobian(get_point(world_points,idx_frame2), 
-                                              get_point(reference_image_points,idx_frame2), 
-                                              K)
-
-        if status == False:
-            continue
-
-        chi = np.dot(error,error)
-        lambda_factor = 1.0 
-
-        if chi > kernel_threshold: 
-            lambda_factor = np.sqrt(kernel_threshold / chi)
-
-        H += J.T @ J * lambda_factor
-        b += J.T @ error * lambda_factor
-
-    return H, b
-
-def solve(H, b): 
-    'Solve a LS problem Ax = b'
-    try: 
-        dx = np.linalg.solve(H, -b)
-    except:
-        dx = np.zeros_like(b)
-    return dx
