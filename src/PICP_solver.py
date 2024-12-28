@@ -6,9 +6,10 @@ class PICP():
         self.camera = camera 
         self.world_points = None 
         self.image_points = None
-        self.kernel_threshold = 100
+        self.kernel_threshold = 10000
     
     def initial_guess(self, world_points, reference_image_points):
+        'Set the map and image points in a ref values'
         self.world_points = world_points
         self.image_points = reference_image_points
     

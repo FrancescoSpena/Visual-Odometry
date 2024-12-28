@@ -62,7 +62,7 @@ class VisualOdometry():
         if(np.linalg.det(R) != 1 or np.linalg.norm(t) == 0):
             self.status = False
         
-        return self.cam.absolute_pose(), self.solver.map(), self.status
+        return self.status
     
     def run(self, idx):
         'Update pose'
