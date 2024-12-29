@@ -69,11 +69,95 @@ class VisualOdometry():
         path_curr = u.generate_path(idx)
         data_curr = u.extract_measurements(path_curr)
 
-        _, points_curr, assoc = u.data_association(self.prev_frame,data_curr)
+        point_prev, points_curr, assoc = u.data_association(self.prev_frame,data_curr)
 
         world_points = self.solver.map()
-        point_prev = self.solver.points_2d()
-        self.solver.initial_guess(world_points, point_prev)
-        self.solver.one_round(assoc)
-        self.solver.set_image_points(points_curr)
+
+        self.solver.initial_guess(self.cam, world_points, point_prev)
+
+        test(assoc, self.cam, world_points, points_curr)
+        for _ in range(50):
+            self.solver.one_round(assoc)
+            dx_norm = np.linalg.norm(self.solver.dx)
+            self.cam.update_pose(self.solver.dx)
+            print(f"Variazione posa (dx): {dx_norm:.6f}")
+
+            if dx_norm <= 0.2:
+                break
+        
+        test(assoc, self.cam, world_points, points_curr)
+
         self.prev_frame = data_curr
+        self.solver.set_image_points(points_curr)
+
+
+def test(assoc, camera, world_points, point_curr):
+    projected_points = []
+
+    for _, idx_frame2 in assoc: 
+        world_point = u.get_point(world_points, idx_frame2)
+        if world_point is None: 
+            continue
+
+        world_point_h = np.append(world_point, 1)
+        point_in_camera = camera.absolute_pose() @ world_point_h
+        point_in_camera = point_in_camera[:3] / point_in_camera[3]
+
+        predicted_image_point, is_valid = u.project_point(point_in_camera, camera.K)
+
+        if not is_valid:
+            continue
+        else:
+            projected_points.append((idx_frame2, predicted_image_point))
+
+    visualize_projections(projected_points, point_curr)
+
+
+def visualize_projections(projected_points, points_curr):
+    """
+    Visualizza i punti proiettati e osservati nel piano immagine.
+
+    Args:
+        projected_points: Lista di punti proiettati nel formato (id, array([x_proj, y_proj])).
+        points_curr: Lista di feature osservate nel formato (id, array([x_obs, y_obs])).
+
+    Returns:
+        None
+    """
+    # Crea liste di coordinate per i punti osservati e proiettati
+    x_proj, y_proj = [], []
+    x_obs, y_obs = [], []
+
+    # Crea dizionari per un accesso più semplice tramite id
+    projected_dict = {point[0]: point[1] for point in projected_points}
+    observed_dict = {point[0]: point[1] for point in points_curr}
+
+    # Trova gli id comuni e raccogli le coordinate corrispondenti
+    common_ids = set(projected_dict.keys()).intersection(observed_dict.keys())
+    for point_id in common_ids:
+        proj = projected_dict[point_id]
+        obs = observed_dict[point_id]
+
+        x_proj.append(proj[0])
+        y_proj.append(proj[1])
+        x_obs.append(obs[0])
+        y_obs.append(obs[1])
+
+    # Verifica che ci siano punti da visualizzare
+    if not x_proj or not x_obs:
+        print("Nessun punto valido da visualizzare.")
+        return
+
+    # Plotta i punti osservati
+    plt.scatter(x_obs, y_obs, c='red', label='Punti osservati', alpha=0.7, s=30)
+
+    # Plotta i punti proiettati
+    plt.scatter(x_proj, y_proj, c='blue', label='Punti proiettati', alpha=0.7, s=30)
+
+    # Aggiungi etichette e legenda
+    plt.xlabel("Coordinata X (pixel)")
+    plt.ylabel("Coordinata Y (pixel)")
+    plt.title("Confronto tra punti osservati e proiettati")
+    plt.legend()
+    plt.grid(True)
+    plt.show()

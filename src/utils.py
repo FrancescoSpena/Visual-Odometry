@@ -315,24 +315,24 @@ def compute_pose(points1, points2, K, diff_gt, z_near=0.0, z_far=5.0):
     print("No sol.")
     return np.eye(3), np.zeros((3, 1))
 
-def project_point(world_point, camera_matrix, width=640, height=480, z_near=0, z_far=5):
+def project_point(camera_point, camera_matrix, width=640, height=480, z_near=0, z_far=5):
     'Project a 3D point into image'
     status = True 
     image_point = np.zeros((2,))
     tolerance = 1e-2
     
-    if world_point[2] <= z_near or world_point[2] > z_far + tolerance:
-        print(f"Point out of camera view, z: {world_point[2]}")
+    if camera_point[2] <= z_near or camera_point[2] > z_far + tolerance:
+        #print(f"Point out of camera view, z: {world_point[2]}, z_near: {z_near}, z_far: {z_far}")
         status = False
-    
-    projected_point = camera_matrix @ world_point
-    image_point[:] = projected_point[:2] / projected_point[2]
+
+    projected_point = camera_matrix @ camera_point
+    image_point = projected_point[:2] * (1. / projected_point[2])
 
     if image_point[0] < 0 or image_point[0] > width-1: 
-        print(f"Point out of image, x: {image_point[0]}")
+        #print(f"Point out of image, x: {image_point[0]}")
         status = False 
     if image_point[1] < 0 or image_point[1] > height-1:
-        print(f"Point out of image, y: {image_point[1]}")
+        #print(f"Point out of image, y: {image_point[1]}")
         status = False 
 
     return image_point, status 

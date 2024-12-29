@@ -8,31 +8,39 @@ class PICP():
         self.image_points = None
         self.kernel_threshold = 10000
     
-    def initial_guess(self, world_points, reference_image_points):
+    def initial_guess(self, camera, world_points, reference_image_points):
         'Set the map and image points in a ref values'
         self.world_points = world_points
         self.image_points = reference_image_points
+        self.camera = camera
     
     def error_and_jacobian(self, world_point, reference_image_point):
         'Compute error and jacobian given the 3D point and 2D point'
         status = True
+        world_point_h = np.append(world_point, 1)
+        camera_point = self.camera.absolute_pose() @ world_point_h
+        camera_point = camera_point[:3] / camera_point[3]
         K = self.camera.K
-        predicted_image_point, is_true = u.project_point(world_point,
-                                                         K)
+        predicted_image_point, is_valid = u.project_point(camera_point,
+                                                          K)
         
-        if(is_true == False):
-            print("No good proj")
+        if not is_valid:
             status = False
+            return None, None, status 
         
         error = predicted_image_point - reference_image_point
 
+        world_point_h = np.append(world_point, 1)
+        point_in_camera = self.camera.absolute_pose() @ world_point_h
+        point_in_camera = point_in_camera[:3] / point_in_camera[3]
+        
         J_r = np.zeros((3,6))
         J_r[:3, :3] = np.eye(3)
-        J_r[:3, 3:] = u.skew(world_point)
+        J_r[:3, 3:] = u.skew(-point_in_camera)
 
-        phom = K @ world_point
+        phom = K @ point_in_camera
         iz = 1.0 / phom[2]
-        iz2 = iz * iz 
+        iz2 = iz*iz 
 
         J_p = np.array([
             [iz, 0, -phom[0]*iz2],
@@ -52,7 +60,6 @@ class PICP():
             world_point = u.get_point(self.world_points,idx_frame2)
             image_point = u.get_point(self.image_points,idx_frame1)
             
-            #Non è detto che il punto 3D è visto dal frame corrente
             if world_point is None or image_point is None:
                 continue
 
@@ -62,13 +69,16 @@ class PICP():
                 continue
 
             chi = np.dot(error,error)
-            lambda_factor = 1.0 
+            lambda_factor = 1
+            is_inlier=True
 
             if chi > self.kernel_threshold: 
                 lambda_factor = np.sqrt(self.kernel_threshold / chi)
+                is_inlier=False
 
-            H += J.T @ J * lambda_factor
-            b += J.T @ error * lambda_factor
+            if is_inlier:
+                H += J.T @ J * lambda_factor
+                b += J.T @ error * lambda_factor
 
         return H, b
 
@@ -83,9 +93,8 @@ class PICP():
     def one_round(self, assoc):
         'Update the pose of the camera'
         H, b = self.linearize(assoc)
-        dx = self.solve(H, b)
-        self.camera.update_pose(dx)
-    
+        self.dx = self.solve(H, b)
+
     def map(self):
         return self.world_points
     

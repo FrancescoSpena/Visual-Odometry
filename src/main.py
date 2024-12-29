@@ -77,6 +77,4 @@ if __name__ == "__main__":
 
         estimated_pose.append(t)
         
-    
-
     visualize(gt[:iter], estimated_pose)
