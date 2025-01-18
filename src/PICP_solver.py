@@ -6,7 +6,13 @@ class PICP():
         self.camera = camera 
         self.world_points = None 
         self.image_points = None
-        self.kernel_threshold = 10000
+        self.kernel_threshold = 1000
+        
+        self.keep_outliers = False
+        self.num_inliers = 0
+        self.chi_inliers = 0
+        self.chi_outliers = 0
+        self.min_num_inliers = 0
     
     def initial_guess(self, camera, world_points, reference_image_points):
         'Set the map and image points in a ref values'
@@ -18,9 +24,9 @@ class PICP():
         'Compute error and jacobian given the 3D point and 2D point'
         status = True
         world_point_h = np.append(world_point, 1)
-        camera_point = self.camera.absolute_pose() @ world_point_h
+        camera_point = self.camera.worldInCameraPose() @ world_point_h
         camera_point = camera_point[:3] / camera_point[3]
-        K = self.camera.K
+        K = self.camera.cameraMatrix()
         predicted_image_point, is_valid = u.project_point(camera_point,
                                                           K)
         
@@ -31,7 +37,7 @@ class PICP():
         error = predicted_image_point - reference_image_point
 
         world_point_h = np.append(world_point, 1)
-        point_in_camera = self.camera.absolute_pose() @ world_point_h
+        point_in_camera = self.camera.worldInCameraPose() @ world_point_h
         point_in_camera = point_in_camera[:3] / point_in_camera[3]
         
         J_r = np.zeros((3,6))
@@ -69,16 +75,19 @@ class PICP():
                 continue
 
             chi = np.dot(error,error)
-            lambda_factor = 1
-            is_inlier=True
-
-            if chi > self.kernel_threshold: 
-                lambda_factor = np.sqrt(self.kernel_threshold / chi)
-                is_inlier=False
-
-            if is_inlier:
-                H += J.T @ J * lambda_factor
-                b += J.T @ error * lambda_factor
+            lam = 1 
+            is_inlier = True
+            if(chi > self.kernel_threshold):
+                lam = np.sqrt(self.kernel_threshold/chi)
+                is_inlier = False 
+                self.chi_outliers += chi 
+            else: 
+                self.chi_inliers += chi 
+                self.num_inliers += 1
+            
+            if(is_inlier or self.keep_outliers):
+                H += np.transpose(J) @ (J * lam)
+                b += np.transpose(J) @ (error * lam)
 
         return H, b
 
@@ -91,10 +100,12 @@ class PICP():
         return dx
 
     def one_round(self, assoc):
-        'Update the pose of the camera'
+        'Compute dx'
         H, b = self.linearize(assoc)
+        if(self.num_inliers < self.min_num_inliers):
+            return
         self.dx = self.solve(H, b)
-
+    
     def map(self):
         return self.world_points
     

@@ -154,31 +154,35 @@ def T2m(T):
 def v2T(v):
     'From vector to homogeneous transformation'
     def Rx(roll):
+        c = np.cos(roll)
+        s = np.sin(roll)
         return np.array([
             [1, 0, 0],
-            [0, np.cos(roll), -np.sin(roll)],
-            [0, np.sin(roll), np.cos(roll)]
+            [0, c, -s],
+            [0, s, c]
         ])
 
     def Ry(pitch):
+        c = np.cos(pitch)
+        s = np.sin(pitch)
         return np.array([
-            [np.cos(pitch), 0, np.sin(pitch)],
+            [c, 0, s],
             [0, 1, 0],
-            [-np.sin(pitch), 0, np.cos(pitch)]
+            [-s, 0, c]
         ])
 
     def Rz(yaw):
+        c = np.cos(yaw)
+        s = np.sin(yaw)
         return np.array([
-            [np.cos(yaw), -np.sin(yaw), 0],
-            [np.sin(yaw), np.cos(yaw), 0],
+            [c, -s, 0],
+            [s, c, 0],
             [0, 0, 1]
         ])
 
-    R = Rx(v[3]) @ Ry(v[4]) @ Rz(v[5])
-    T = np.eye(4)
-    T[:3, :3] = R
+    T = np.eye(4, dtype=np.float32)  
+    T[:3, :3] = Rx(v[3]) @ Ry(v[4]) @ Rz(v[5])
     T[:3, 3] = v[:3]
-
     return T
 
 def plot_match(points1, points2):
