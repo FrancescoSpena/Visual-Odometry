@@ -65,24 +65,25 @@ class VisualOdometry():
         return self.status
     
     def picp(self, assoc):
-        self.solver.one_round(assoc)
-        dx = self.solver.dx
-        self.cam.updatePose(dx)
-        self.cam.setWorldInCameraPose(self.cam.worldInCameraPose())
-    
+        pass
+            
     def run(self, idx):
         'Update pose'
         path_curr = u.generate_path(idx)
         curr_frame = u.extract_measurements(path_curr)
 
-        points_prev, _, assoc = u.data_association(self.prev_frame,curr_frame)
+        points_prev, points_curr, assoc = u.data_association(self.prev_frame,curr_frame)
 
         world_points = self.solver.map()
-        self.solver.initial_guess(self.cam, world_points, points_prev)
-
+        
         test(assoc, self.cam, world_points, points_prev)
         
-        self.picp(assoc)
+        for _ in range(500):
+            self.solver.initial_guess(self.cam, world_points, points_prev)
+            self.solver.one_round(assoc)
+            self.cam.setWorldInCameraPose(u.v2T(self.solver.dx)*self.cam.worldInCameraPose())
+        
+        self.cam.setWorldInCameraPose(self.cam.worldInCameraPose())
         
         test(assoc, self.cam, world_points, points_prev)
 
@@ -97,11 +98,7 @@ def test(assoc, camera, world_points, point_curr):
         if world_point is None: 
             continue
 
-        world_point_h = np.append(world_point, 1)
-        point_in_camera = camera.worldInCameraPose() @ world_point_h
-        point_in_camera = point_in_camera[:3] / point_in_camera[3]
-
-        predicted_image_point, is_valid = u.project_point(point_in_camera, camera.K)
+        predicted_image_point, is_valid =  camera.project_point(world_point)
 
         if not is_valid:
             continue
@@ -147,35 +144,3 @@ def visualize_projections_with_id(projected_points, points_curr):
     plt.grid(True)
     plt.show()
 
-
-def visualize_projections(projected_points, points_curr):
-    x_proj, y_proj = [], []
-    x_obs, y_obs = [], []
-
-    projected_dict = {point[0]: point[1] for point in projected_points}
-    observed_dict = {point[0]: point[1] for point in points_curr}
-
-    common_ids = set(projected_dict.keys()).intersection(observed_dict.keys())
-    for point_id in common_ids:
-        proj = projected_dict[point_id]
-        obs = observed_dict[point_id]
-
-        x_proj.append(proj[0])
-        y_proj.append(proj[1])
-        x_obs.append(obs[0])
-        y_obs.append(obs[1])
-
-    if not x_proj or not x_obs:
-        print("Nessun punto valido da visualizzare.")
-        return
-
-    plt.figure(figsize=(20, 10))
-    plt.scatter(x_obs, y_obs, c='red', label='Punti osservati', alpha=0.7, s=30)
-    plt.scatter(x_proj, y_proj, c='blue', label='Punti proiettati', alpha=0.7, s=30)
-
-    plt.xlabel("Coordinata X (pixel)")
-    plt.ylabel("Coordinata Y (pixel)")
-    plt.title("Confronto tra punti osservati e proiettati")
-    plt.legend()
-    plt.grid(True)
-    plt.show()

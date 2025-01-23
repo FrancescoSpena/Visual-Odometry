@@ -276,14 +276,6 @@ def compute_pose(points1, points2, K, diff_gt, z_near=0.0, z_far=5.0):
     'Compute E -> Pose'
     E, mask = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, threshold=1.0, prob=0.999)
     
-    # print("Essential Matrix E:\n", E)
-    # u, s, vt = np.linalg.svd(E)
-    # print("Singular values of E:", s)
-
-    # parallax = np.linalg.norm(points1 - points2, axis=1)
-    # print("Mean Parallax:", np.mean(parallax))
-
-    #Filter the outliers
     points1 = points1[mask.ravel() == 1]
     points2 = points2[mask.ravel() == 1]
 
@@ -319,28 +311,6 @@ def compute_pose(points1, points2, K, diff_gt, z_near=0.0, z_far=5.0):
     print("No sol.")
     return np.eye(3), np.zeros((3, 1))
 
-def project_point(camera_point, camera_matrix, width=640, height=480, z_near=0, z_far=5):
-    'Project a 3D point into image'
-    status = True 
-    image_point = np.zeros((2,))
-    tolerance = 1e-2
-    
-    if camera_point[2] <= z_near or camera_point[2] > z_far + tolerance:
-        #print(f"Point out of camera view, z: {world_point[2]}, z_near: {z_near}, z_far: {z_far}")
-        status = False
-
-    projected_point = camera_matrix @ camera_point
-    image_point = projected_point[:2] * (1. / projected_point[2])
-
-    if image_point[0] < 0 or image_point[0] > width-1: 
-        #print(f"Point out of image, x: {image_point[0]}")
-        status = False 
-    if image_point[1] < 0 or image_point[1] > height-1:
-        #print(f"Point out of image, y: {image_point[1]}")
-        status = False 
-
-    return image_point, status 
-
 def update_point(vector, target_idx, new_point):
     'Update point with ID=target_idx'
     for i in range(len(vector)):
@@ -363,3 +333,12 @@ def skew(vector):
         [vector[2], 0, -vector[0]],
         [-vector[1], vector[0], 0]
     ])
+
+def w2C(world_point, camera_pose):
+    'From world point to camera point'
+
+    world_point_h = np.append(world_point, 1)
+    camera_point = camera_pose @ world_point_h
+    camera_point = camera_point[:3] / camera_point[3]
+
+    return camera_point

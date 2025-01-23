@@ -6,7 +6,7 @@ class PICP():
         self.camera = camera 
         self.world_points = None 
         self.image_points = None
-        self.kernel_threshold = 1000
+        self.kernel_threshold = 10000
         
         self.keep_outliers = False
         self.num_inliers = 0
@@ -23,29 +23,24 @@ class PICP():
     def error_and_jacobian(self, world_point, reference_image_point):
         'Compute error and jacobian given the 3D point and 2D point'
         status = True
-        world_point_h = np.append(world_point, 1)
-        camera_point = self.camera.worldInCameraPose() @ world_point_h
-        camera_point = camera_point[:3] / camera_point[3]
+
         K = self.camera.cameraMatrix()
-        predicted_image_point, is_valid = u.project_point(camera_point,
-                                                          K)
+        predicted_image_point, is_valid = self.camera.project_point(world_point)
         
-        if not is_valid:
-            status = False
-            return None, None, status 
+        if (is_valid == False):
+            return None, None, False 
         
         error = predicted_image_point - reference_image_point
 
-        world_point_h = np.append(world_point, 1)
-        point_in_camera = self.camera.worldInCameraPose() @ world_point_h
-        point_in_camera = point_in_camera[:3] / point_in_camera[3]
+        camera_point = u.w2C(world_point, self.camera.worldInCameraPose())
         
         J_r = np.zeros((3,6))
         J_r[:3, :3] = np.eye(3)
-        J_r[:3, 3:] = u.skew(-point_in_camera)
+        J_r[:3, 3:] = u.skew(-camera_point)
 
-        phom = K @ point_in_camera
-        iz = 1.0 / phom[2]
+        phom = K @ camera_point
+        
+        iz = 1. / phom[2]
         iz2 = iz*iz 
 
         J_p = np.array([
@@ -63,8 +58,10 @@ class PICP():
         b = np.zeros(6)
 
         for idx_frame1, idx_frame2 in assoc: 
-            world_point = u.get_point(self.world_points,idx_frame2)
-            image_point = u.get_point(self.image_points,idx_frame1)
+            ref_idx = idx_frame1
+            curr_idx = idx_frame2
+            world_point = u.get_point(self.world_points,curr_idx)
+            image_point = u.get_point(self.image_points,ref_idx)
             
             if world_point is None or image_point is None:
                 continue
@@ -86,8 +83,8 @@ class PICP():
                 self.num_inliers += 1
             
             if(is_inlier or self.keep_outliers):
-                H += np.transpose(J) @ (J * lam)
-                b += np.transpose(J) @ (error * lam)
+                H += np.transpose(J) @ J * lam
+                b += np.transpose(J) @ error * lam
 
         return H, b
 
@@ -96,7 +93,7 @@ class PICP():
         try: 
             dx = np.linalg.solve(H, -b)
         except:
-            dx = np.zeros_like(b)
+            dx = np.zeros_like(-b)
         return dx
 
     def one_round(self, assoc):

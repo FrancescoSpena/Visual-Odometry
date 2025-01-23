@@ -55,6 +55,7 @@ if __name__ == "__main__":
     estimated_pose.append(t)
 
     print(f"Status init: {status}")
+    print(f"i: 0 -->\n estimated t: {t}\n gt t: {gt[0]}")
 
     iter = 2
     for i in range(1, iter):
@@ -63,5 +64,7 @@ if __name__ == "__main__":
         R, t = u.T2m(T)
 
         estimated_pose.append(t)
+        
+        print(f"i: {i} -->\n estimated t: {t}\n gt t: {gt[i]}")
 
     visualize(gt[:iter], estimated_pose)
