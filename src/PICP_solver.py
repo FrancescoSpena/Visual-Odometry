@@ -62,7 +62,7 @@ class PICP():
             curr_idx = idx_frame2
             world_point = u.get_point(self.world_points,curr_idx)
             image_point = u.get_point(self.image_points,ref_idx)
-            
+
             if world_point is None or image_point is None:
                 continue
 
@@ -83,18 +83,14 @@ class PICP():
                 self.num_inliers += 1
             
             if(is_inlier or self.keep_outliers):
-                H += np.transpose(J) @ J * lam
-                b += np.transpose(J) @ error * lam
+                H += J.T @ J * lam
+                b += J.T @ error * lam
 
         return H, b
 
     def solve(self, H, b): 
-        'Solve a LS problem Ax = b'
-        try: 
-            dx = np.linalg.solve(H, -b)
-        except:
-            dx = np.zeros_like(-b)
-        return dx
+        'Solve a LS problem H*delta_x = -b'
+        return np.linalg.solve(H, -b)
 
     def one_round(self, assoc):
         'Compute dx'

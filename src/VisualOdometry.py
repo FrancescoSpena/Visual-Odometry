@@ -13,6 +13,7 @@ class VisualOdometry():
         self.cam = camera.Camera(K)
         self.solver = solver.PICP(self.cam)
         self.status = True
+        self.index_prev_frame = 0
 
     def init(self):
         path0 = u.generate_path(0)
@@ -24,7 +25,8 @@ class VisualOdometry():
         other_info_frame_0 = u.extract_other_info(path0)
         other_info_frame_1 = u.extract_other_info(path1)
 
-        self.prev_frame = data_frame_0
+        self.prev_frame = data_frame_1
+        self.index_prev_frame = 1
         
         #points0: frame 0, points1: frame1 --> (ID, (X,Y))
         points0, points1, assoc = u.data_association(data_frame_0, 
@@ -53,10 +55,7 @@ class VisualOdometry():
                                   assoc)
         
     
-        self.cam.setWorldInCameraPose(u.m2T(R,t))
-
         self.solver.set_map(points_3d)
-        self.solver.set_image_points(points0)
 
         #Check
         if(np.linalg.det(R) != 1 or np.linalg.norm(t) == 0):
@@ -65,29 +64,48 @@ class VisualOdometry():
         return self.status
     
     def picp(self, assoc):
-        pass
+        tolerance = 1e-6
+        for i in range(500):
+            self.solver.one_round(assoc)
+            self.cam.setWorldInCameraPose(u.v2T(self.solver.dx) @ self.cam.worldInCameraPose())
+
+            dx_norm = np.linalg.norm(self.solver.dx)
+            if i % 100 == 0 or  dx_norm < tolerance: 
+                print(f"dx = {np.linalg.norm(self.solver.dx)}")
+                if dx_norm < tolerance:
+                    print("Converged!")
+                    break
             
     def run(self, idx):
+        '''
+        Some note: 
+
+        T_i_i+1 is the relative transformation that describes the change in the camera's
+        position and orientation from the prev frame to the current frame. 
+
+        T_world_camera_i+1 = T_i_i+1 @ T_world_camera
+        '''
+        
         'Update pose'
+        idx+=1
+        print(f"idx_prev: {self.index_prev_frame}, idx_curr: {idx}")
         path_curr = u.generate_path(idx)
         curr_frame = u.extract_measurements(path_curr)
 
         points_prev, points_curr, assoc = u.data_association(self.prev_frame,curr_frame)
 
         world_points = self.solver.map()
+        self.solver.initial_guess(self.cam, world_points, points_prev)
+
+        test(assoc, self.cam, world_points, points_curr)
         
-        test(assoc, self.cam, world_points, points_prev)
-        
-        for _ in range(500):
-            self.solver.initial_guess(self.cam, world_points, points_prev)
-            self.solver.one_round(assoc)
-            self.cam.setWorldInCameraPose(u.v2T(self.solver.dx)*self.cam.worldInCameraPose())
-        
-        self.cam.setWorldInCameraPose(self.cam.worldInCameraPose())
-        
-        test(assoc, self.cam, world_points, points_prev)
+        #Compute the relative T_i_i+1 from prev to curr frame
+        self.picp(assoc)
+
+        test(assoc, self.cam, world_points, points_curr)
 
         self.prev_frame = curr_frame
+        self.index_prev_frame+=1
 
 
 def test(assoc, camera, world_points, point_curr):

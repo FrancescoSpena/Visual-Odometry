@@ -232,16 +232,9 @@ def data_association(first_data, second_data, threshold=0.2):
             
             if min_distance < threshold:
                 associations.append((i, best_match_idx))
-    
-    # for i, j in associations:
-    #     print(f"Point {i} in first_data -> Point {j} in second_data")
-    #     print(f"  Appearance Features 1:\n {first_data['Appearance_Features'][i]}")
-    #     print(f"  Appearance Features 2:\n {second_data['Appearance_Features'][j]}")
-    #     print("==================")
-    
+
     points_first = [(i, np.array([first_data['Image_X'][i], first_data['Image_Y'][i]])) for i, _ in associations]
     points_second = [(j, np.array([second_data['Image_X'][j], second_data['Image_Y'][j]])) for _, j in associations]
-
 
     return points_first, points_second, associations
 

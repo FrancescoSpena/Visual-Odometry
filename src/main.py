@@ -22,6 +22,8 @@ def visualize(pos_gt, pos_estimated):
 
     ax.plot(x_est, y_est, z_est, label='traj est', marker='x')
 
+    ax.scatter(0, 0, 0, color='red', s=100, label='Origin')  # A red dot at the origin
+
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
@@ -55,7 +57,7 @@ if __name__ == "__main__":
     estimated_pose.append(t)
 
     print(f"Status init: {status}")
-    print(f"i: 0 -->\n estimated t: {t}\n gt t: {gt[0]}")
+    print(f"from frame 0 to frame 1 -->\n estimated t:\n {t}\n gt t: {gt[0]}")
 
     iter = 2
     for i in range(1, iter):
@@ -65,6 +67,6 @@ if __name__ == "__main__":
 
         estimated_pose.append(t)
         
-        print(f"i: {i} -->\n estimated t: {t}\n gt t: {gt[i]}")
+        print(f"from frame {i} to frame {i+1} -->\n estimated t:\n {t}\n gt t: {gt[i]}")
 
-    visualize(gt[:iter], estimated_pose)
+    #visualize(gt[:iter], estimated_pose)
