@@ -319,12 +319,12 @@ def get_point(vector, target_idx):
             return point
     return None
 
-def skew(vector):
+def skew(v):
     'Convert a vector in a skew-symmetric matrix'
     return np.array([
-        [0, -vector[2], vector[1]],
-        [vector[2], 0, -vector[0]],
-        [-vector[1], vector[0], 0]
+        [  0,   -v[2],  v[1]],
+        [ v[2],    0,  -v[0]],
+        [-v[1],  v[0],    0]
     ])
 
 def w2C(world_point, camera_pose):

@@ -13,18 +13,23 @@ class Camera():
         self.tolerance = 1e-2
     
     def worldInCameraPose(self):
+        'Return the transformation of the camera'
         return self.world_in_camera_pose
     
     def setWorldInCameraPose(self, pose):
+        'Set the camera in the pose=pose'
         self.world_in_camera_pose = pose
     
     def cameraMatrix(self):
+        'Return the camera matrix'
         return self.K
     
     def updatePose(self, dx):
+        'Update the pose of the camera with an increment dx (boxplus operator)'
         self.setWorldInCameraPose(u.v2T(dx) @ self.worldInCameraPose())
     
     def project_point(self, world_point, width=640, height=480, z_near=0, z_far=5): 
+        'Project on the image the world_point=world_point'
         image_point = np.zeros((2,))
         world_point_h = np.append(world_point, 1)
         camera_point = self.worldInCameraPose() @ world_point_h

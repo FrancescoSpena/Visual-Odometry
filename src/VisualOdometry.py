@@ -2,9 +2,7 @@ import utils as u
 import numpy as np
 import PICP_solver as solver
 import Camera as camera
-import cv2
 import matplotlib.pyplot as plt
-import keyboard
 
 class VisualOdometry():
     def __init__(self, camera_path='../data/camera.dat'):
@@ -24,9 +22,6 @@ class VisualOdometry():
 
         other_info_frame_0 = u.extract_other_info(path0)
         other_info_frame_1 = u.extract_other_info(path1)
-
-        self.prev_frame = data_frame_1
-        self.index_prev_frame = 1
         
         #points0: frame 0, points1: frame1 --> (ID, (X,Y))
         points0, points1, assoc = u.data_association(data_frame_0, 
@@ -56,6 +51,8 @@ class VisualOdometry():
         
     
         self.solver.set_map(points_3d)
+        self.prev_frame = data_frame_1
+        self.index_prev_frame = 1
 
         #Check
         if(np.linalg.det(R) != 1 or np.linalg.norm(t) == 0):
@@ -65,9 +62,9 @@ class VisualOdometry():
     
     def picp(self, assoc):
         tolerance = 1e-6
-        for i in range(500):
+        for i in range(1000):
             self.solver.one_round(assoc)
-            self.cam.setWorldInCameraPose(u.v2T(self.solver.dx) @ self.cam.worldInCameraPose())
+            self.cam.updatePose(self.solver.dx)
 
             dx_norm = np.linalg.norm(self.solver.dx)
             if i % 100 == 0 or  dx_norm < tolerance: 
@@ -77,33 +74,26 @@ class VisualOdometry():
                     break
             
     def run(self, idx):
-        '''
-        Some note: 
-
-        T_i_i+1 is the relative transformation that describes the change in the camera's
-        position and orientation from the prev frame to the current frame. 
-
-        T_world_camera_i+1 = T_i_i+1 @ T_world_camera
-        '''
-        
-        'Update pose'
+        'Update pose from idx to idx+1'
         idx+=1
         print(f"idx_prev: {self.index_prev_frame}, idx_curr: {idx}")
         path_curr = u.generate_path(idx)
+        
+        prev_frame = self.prev_frame
         curr_frame = u.extract_measurements(path_curr)
 
-        points_prev, points_curr, assoc = u.data_association(self.prev_frame,curr_frame)
+        points_prev, points_curr, assoc = u.data_association(prev_frame,curr_frame)
 
-        world_points = self.solver.map()
-        self.solver.initial_guess(self.cam, world_points, points_prev)
+        #Initial guess
+        self.solver.initial_guess(self.cam, self.solver.map(), points_prev)
 
-        test(assoc, self.cam, world_points, points_curr)
+        test(assoc, self.cam, self.solver.map(), points_curr)
         
-        #Compute the relative T_i_i+1 from prev to curr frame
+        #picp
         self.picp(assoc)
 
-        test(assoc, self.cam, world_points, points_curr)
-
+        test(assoc, self.cam, self.solver.map(), points_curr)
+        
         self.prev_frame = curr_frame
         self.index_prev_frame+=1
 
@@ -152,13 +142,13 @@ def visualize_projections_with_id(projected_points, points_curr):
     plt.scatter(x_proj, y_proj, c='blue', label='Punti proiettati', alpha=0.7, s=30)
 
     for i, point_id in enumerate(common_ids):
+        plt.plot([x_obs[i], x_proj[i]], [y_obs[i], y_proj[i]], 'k--', linewidth=0.7, alpha=0.6)
         plt.text(x_obs[i], y_obs[i], str(point_id), fontsize=8, color='red')
         plt.text(x_proj[i], y_proj[i], str(point_id), fontsize=8, color='blue')
 
     plt.xlabel("Coordinata X (pixel)")
     plt.ylabel("Coordinata Y (pixel)")
-    plt.title("Confronto tra punti osservati e proiettati (con ID)")
+    plt.title("Confronto tra punti osservati e proiettati (con ID e connessioni)")
     plt.legend()
     plt.grid(True)
     plt.show()
-

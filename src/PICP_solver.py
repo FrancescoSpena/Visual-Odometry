@@ -13,6 +13,7 @@ class PICP():
         self.chi_inliers = 0
         self.chi_outliers = 0
         self.min_num_inliers = 0
+        self.damping = 0.1
     
     def initial_guess(self, camera, world_points, reference_image_points):
         'Set the map and image points in a ref values'
@@ -36,7 +37,7 @@ class PICP():
         
         J_r = np.zeros((3,6))
         J_r[:3, :3] = np.eye(3)
-        J_r[:3, 3:] = u.skew(-camera_point)
+        J_r[:, 3:6] = u.skew(-camera_point)
 
         phom = K @ camera_point
         
@@ -48,7 +49,11 @@ class PICP():
             [0, iz, -phom[1]*iz2]
         ])
 
+        # (2 x 3) @ (3 x 3) @ (3 x 6)
+        # (2 x 3) @ (3 x 6)
+        # (2 x 6)
         J = J_p @ K @ J_r
+
 
         return error, J, status
     
@@ -95,6 +100,7 @@ class PICP():
     def one_round(self, assoc):
         'Compute dx'
         H, b = self.linearize(assoc)
+        H += np.eye(6) * self.damping
         if(self.num_inliers < self.min_num_inliers):
             return
         self.dx = self.solve(H, b)
