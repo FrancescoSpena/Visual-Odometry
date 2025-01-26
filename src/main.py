@@ -69,4 +69,4 @@ if __name__ == "__main__":
         
         print(f"from frame {i} to frame {i+1} -->\n estimated t:\n {t}\n gt t: {gt[i]}")
 
-    #visualize(gt[:iter], estimated_pose)
+    visualize(gt[:iter], estimated_pose)

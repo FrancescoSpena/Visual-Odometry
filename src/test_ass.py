@@ -5,75 +5,93 @@ import matplotlib.pyplot as plt
 
 import Camera as cam
 import VisualOdometry as vo 
+import random
+import pandas as pd 
 
-def generate_frame(num_points=50, noise_std=0.01, depth_range=(2.0, 8.0)):
-    points_2d = np.random.rand(num_points, 2)
+#Generate 3D points with structure (ID, (x, y, z))
+def generate_3d_points(num_points, x_range=640, y_range=480, z_range=3):
+    points = []
+    for i in range(1, num_points + 1):
+        x = random.uniform(0, x_range)
+        y = random.uniform(0, y_range)
+        z = random.uniform(1, z_range)
+        points.append((i, (x, y, z)))
+    return points
 
-    depths = np.random.uniform(depth_range[0], depth_range[1], size=num_points)
-    points_3d = np.hstack((points_2d, depths[:, np.newaxis]))
 
-    points_3d += np.random.normal(0, noise_std, points_3d.shape)
-
-    point_ids = list(range(num_points))
-    actual_ids = point_ids.copy()
-    appearance_features = np.random.rand(num_points, 128)
-
-    frame_data = {
-        'Point_IDs': point_ids,
-        'Actual_IDs': actual_ids,
-        'Image_X': points_2d[:, 0].tolist(),
-        'Image_Y': points_2d[:, 1].tolist(),
-        'Appearance_Features': appearance_features
+#Generate data frame:
+def generate_dataframe(num_points):
+    data = {
+        'Point_ID': [i + 1 for i in range(num_points)],
+        'Actual_ID': [random.randint(1000, 9999) for _ in range(num_points)],
+        'Image_X': [random.uniform(0.0, 640.0) for _ in range(num_points)],  # Assuming a 640x480 image resolution
+        'Image_Y': [random.uniform(0.0, 480.0) for _ in range(num_points)],
+        'Appearance_Features': [list(np.random.rand(5)) for _ in range(num_points)],  # 5 random features per point
     }
-
-    points_3d_data = {
-        'Point_IDs': point_ids,
-        'Points_3D': points_3d.tolist()
+    
+    df_points = pd.DataFrame(data)
+    
+    result = {
+        'Point_IDs': df_points['Point_ID'].tolist(),
+        'Actual_IDs': df_points['Actual_ID'].tolist(),
+        'Image_X': df_points['Image_X'].tolist(),
+        'Image_Y': df_points['Image_Y'].tolist(),
+        'Appearance_Features': df_points['Appearance_Features'].tolist(),
     }
+    
+    return result
 
-    return frame_data, points_3d_data
+#Function to apply a transformation (R, t) on the 3D points and return an np.array with
+#structure (ID, (x, y, z))
+def transform_3d_points(points, R, t):
+    transformed_points = []
 
-def transform_frame(frame, translation, rotation_angle, noise_std=0.01, points_3d=None):
-    points = np.array([frame['Image_X'], frame['Image_Y']]).T
+    for point in points:
+        point_id, (x, y, z) = point
+        original_point = np.array([x, y, z]).reshape(3, 1)
+        transformed_point = (R @ original_point + t).flatten()
+        transformed_points.append((point_id, (transformed_point[0], transformed_point[1], transformed_point[2])))
 
-    rotation_matrix = np.array([
-        [np.cos(rotation_angle), -np.sin(rotation_angle)],
-        [np.sin(rotation_angle), np.cos(rotation_angle)]
-    ])
+    return transformed_points
 
-    rotated_points = points @ rotation_matrix.T
-    transformed_points = rotated_points + np.array(translation[:2])
-    transformed_points += np.random.normal(0, noise_std, transformed_points.shape)
+#Function to apply a transformation (R, t) on the 2D points with structure (ID, (x, y))
+def transform_2d_points(points, R, t):
+    transformed_points = []
 
-    transformed_points_3d = None
-    if points_3d is not None:
-        
-        rotation_matrix_3d = np.array([
-            [np.cos(rotation_angle), -np.sin(rotation_angle), 0],
-            [np.sin(rotation_angle), np.cos(rotation_angle), 0],
-            [0, 0, 1]
-        ])
+    for point in points:
+        point_id, (x, y) = point
+        original_point = np.array([x, y]).reshape(2, 1)
+        transformed_point = (R @ original_point + t).flatten()
+        transformed_points.append((point_id, (transformed_point[0], transformed_point[1])))
 
-        transformed_points_3d = []
-        for point in points_3d:
-            transformed_coords = (rotation_matrix_3d @ point['Coordinates']).T + np.array(translation)
-            transformed_coords += np.random.normal(0, noise_std, transformed_coords.shape)
-            transformed_points_3d.append({'ID': point['ID'], 'Coordinates': transformed_coords})
+    return transformed_points
 
-    transformed_frame = {
-        'Point_IDs': frame['Point_IDs'],
-        'Actual_IDs': frame['Actual_IDs'],
-        'Image_X': transformed_points[:, 0].tolist(),
-        'Image_Y': transformed_points[:, 1].tolist(),
-        'Appearance_Features': frame['Appearance_Features']
-    }
+def create_2d_points_from_frame(frame):
+    point_ids = frame['Point_IDs']
+    image_x = frame['Image_X']
+    image_y = frame['Image_Y']
 
-    return transformed_frame, transformed_points_3d
+    structured_points = np.array(
+        [(pid, (x, y)) for pid, x, y in zip(point_ids, image_x, image_y)],
+        dtype=[('ID', int), ('Coordinates', float, (2,))]
+    )
+    
+    return structured_points
 
+def create_new_frame(frame, points): 
+    new_ids = [point[0] for point in points]
+    new_x = [point[1][0] for point in points]
+    new_y = [point[1][1] for point in points]
+    
+    # Create a new dictionary by updating Point_IDs, Image_X, and Image_Y
+    updated_result = frame.copy()
+    updated_result['Point_IDs'] = new_ids
+    updated_result['Image_X'] = new_x
+    updated_result['Image_Y'] = new_y
 
+    return updated_result
 
 def plot_associations(frame1, frame2, points1, points2):
-    plt.figure(figsize=(10, 6))
     plt.scatter(frame1['Image_X'], frame1['Image_Y'], c='blue', label='Frame 1')
     plt.scatter(frame2['Image_X'], frame2['Image_Y'], c='red', label='Frame 2')
     for (id1, point1), (id2, point2) in zip(points1, points2):
@@ -86,23 +104,27 @@ def plot_associations(frame1, frame2, points1, points2):
     plt.show()
 
 
-frame1, points_3d_frame1 = generate_frame()
 
-translation = [0.5, -0.1]
-rotation_angle = np.pi / 6 #30°
+#Generate data frame 
+frame1 = generate_dataframe(50)
 
-frame2, points_3d_frame2 = transform_frame(frame1, translation, rotation_angle, points_3d_frame1)
+#Extract 2D points from frame 
+points_2d_frame1 = create_2d_points_from_frame(frame1)
 
-points0, points1, assoc = u.data_association(frame1, frame2)
+#Apply transformation 
+angle_radians = 30
+R = np.array([
+    [np.cos(angle_radians), -np.sin(angle_radians)],
+    [np.sin(angle_radians),  np.cos(angle_radians)]
+])
+t = np.zeros((2,1))
 
-plot_associations(frame1, frame2, points0, points1)
+points_2d_frame2 = transform_2d_points(points_2d_frame1, R, t)
+
+#Create new frame
+frame2 = create_new_frame(frame1, points_2d_frame1)
+
+#Data association
+points1, points2, assoc = u.data_association(frame1, frame2)
 
 
-camera_path='../data/camera.dat'
-camera_info = u.extract_camera_data(camera_path)
-camera_matrix = camera_info['camera_matrix']
-camera = cam.Camera(camera_matrix)
-
-
-
-# vo.test(assoc, camera, points_3d_frame2, points1)

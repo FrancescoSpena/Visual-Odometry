@@ -87,12 +87,12 @@ class VisualOdometry():
         #Initial guess
         self.solver.initial_guess(self.cam, self.solver.map(), points_prev)
 
-        test(assoc, self.cam, self.solver.map(), points_curr)
+        #test(assoc, self.cam, self.solver.map(), points_curr)
         
         #picp
         self.picp(assoc)
 
-        test(assoc, self.cam, self.solver.map(), points_curr)
+        #test(assoc, self.cam, self.solver.map(), points_curr)
         
         self.prev_frame = curr_frame
         self.index_prev_frame+=1
@@ -114,7 +114,6 @@ def test(assoc, camera, world_points, point_curr):
             projected_points.append((idx_frame2, predicted_image_point))
 
     visualize_projections_with_id(projected_points, point_curr)
-
 
 def visualize_projections_with_id(projected_points, points_curr):
     x_proj, y_proj = [], []
