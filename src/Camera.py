@@ -3,7 +3,9 @@ import utils as u
 
 class Camera():
     def __init__(self, K, z_near=0, z_far=5, width=640, height=480):
-        self.world_in_camera_pose = np.eye(4)
+        self.T_abs = np.eye(4)
+        self.T_rel = np.eye(4)
+        
         self.K = K
         
         self.z_near = z_near
@@ -12,27 +14,32 @@ class Camera():
         self.height = height
         self.tolerance = 1e-2
     
-    def worldInCameraPose(self):
-        'Return the transformation of the camera'
-        return self.world_in_camera_pose
+    def absolutePose(self):
+        'Return the absolute pose (from frame 0 to frame i+1)'
+        return self.T_abs
+
+    def relativePose(self):
+        'Return the relative pose (from frame i to frame i+1)'
+        return self.T_rel
     
-    def setWorldInCameraPose(self, pose):
-        'Set the camera in the pose=pose'
-        self.world_in_camera_pose = pose
+    def updatePose(self, T_rel):
+        'Update pose (from 0 to frame i+1 and save T_rel)'
+        self.T_rel = T_rel
+        self.T_abs = self.T_abs @ self.T_rel
+    
+    def setCameraPose(self, pose):
+        'Update the absolute pose with the pose (T_abs=pose)'
+        self.T_abs = pose
     
     def cameraMatrix(self):
         'Return the camera matrix'
         return self.K
     
-    def updatePose(self, dx):
-        'Update the pose of the camera with an increment dx (boxplus operator)'
-        self.setWorldInCameraPose(u.v2T(dx) @ self.worldInCameraPose())
-    
     def project_point(self, world_point, width=640, height=480, z_near=0, z_far=5): 
         'Project on the image the world_point=world_point'
         image_point = np.zeros((2,))
         world_point_h = np.append(world_point, 1)
-        camera_point = self.worldInCameraPose() @ world_point_h
+        camera_point = self.absolutePose() @ world_point_h
         camera_point = camera_point[:3] / camera_point[3]
 
         if camera_point[2] <= z_near or camera_point[2] > z_far + self.tolerance:

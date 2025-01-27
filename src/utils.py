@@ -139,11 +139,42 @@ def m2T(R, t):
     T[:3, 3] = t.ravel()
     return T
 
-def gt2T(gt):
-    'gt to homogeneous transformation'
+def g2T(v):
+    'From (x, y, theta) to homogeneous transformation'
+    x = v[0]
+    y = v[1]
+    theta = v[2]
     T = np.eye(4)
-    T[:3, 3] = gt 
+
+    c = np.cos(theta)
+    s = np.sin(theta)
+    
+    R = np.array([
+        [c, -s, 0],
+        [s, c, 0],
+        [0, 0, 1]
+    ])
+
+    t = np.array([
+        [x],
+        [y],
+        [0]
+    ])
+
+    T = np.block([
+        [R, t],
+        [np.array([0, 0, 0, 1])]
+    ])
+
     return T
+
+def relativeMotion(T0, T1):
+    'relative motion between two homogenous transformation'
+    'e.g. T1 = 0_T_1, T2 = 0_T_2 --> 1_T_2 = (0_T_1)^{-1} @ 0_T_2'
+    return np.linalg.inv(T0) @ T1
+
+def errorEstimatedToGt(T_gt_rel, T_est_rel):
+    return np.linalg.inv(T_est_rel) @ T_gt_rel
 
 def T2m(T):
     'From homogeneous transformation to R, t'

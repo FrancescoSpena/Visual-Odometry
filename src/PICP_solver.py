@@ -33,7 +33,7 @@ class PICP():
         
         error = predicted_image_point - reference_image_point
 
-        camera_point = u.w2C(world_point, self.camera.worldInCameraPose())
+        camera_point = u.w2C(world_point, self.camera.absolutePose())
         
         J_r = np.zeros((3,6))
         J_r[:3, :3] = np.eye(3)

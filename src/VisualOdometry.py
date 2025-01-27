@@ -41,6 +41,7 @@ class VisualOdometry():
                               self.cam.K,
                               gt_dist)
         
+        
         #3D points of the frame 0
         points_3d = u.triangulate(R,
                                   t,
@@ -49,7 +50,8 @@ class VisualOdometry():
                                   self.cam.K,
                                   assoc)
         
-    
+        T_init = u.m2T(R,t)
+        self.cam.setCameraPose(T_init)
         self.solver.set_map(points_3d)
         self.prev_frame = data_frame_1
         self.index_prev_frame = 1
@@ -61,22 +63,15 @@ class VisualOdometry():
         return self.status
     
     def picp(self, assoc):
-        tolerance = 1e-6
-        for i in range(1000):
-            self.solver.one_round(assoc)
-            self.cam.updatePose(self.solver.dx)
+        #Compute the dx
+        self.solver.one_round(assoc)
+        T_rel = u.v2T(self.solver.dx)
+        self.cam.updatePose(T_rel)
 
-            dx_norm = np.linalg.norm(self.solver.dx)
-            if i % 100 == 0 or  dx_norm < tolerance: 
-                print(f"dx = {np.linalg.norm(self.solver.dx)}")
-                if dx_norm < tolerance:
-                    print("Converged!")
-                    break
             
     def run(self, idx):
         'Update pose from idx to idx+1'
         idx+=1
-        print(f"idx_prev: {self.index_prev_frame}, idx_curr: {idx}")
         path_curr = u.generate_path(idx)
         
         prev_frame = self.prev_frame
@@ -87,12 +82,8 @@ class VisualOdometry():
         #Initial guess
         self.solver.initial_guess(self.cam, self.solver.map(), points_prev)
 
-        #test(assoc, self.cam, self.solver.map(), points_curr)
-        
         #picp
         self.picp(assoc)
-
-        #test(assoc, self.cam, self.solver.map(), points_curr)
         
         self.prev_frame = curr_frame
         self.index_prev_frame+=1
