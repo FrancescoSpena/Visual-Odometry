@@ -11,7 +11,6 @@ class VisualOdometry():
         self.cam = camera.Camera(K)
         self.solver = solver.PICP(self.cam)
         self.status = True
-        self.index_prev_frame = 0
 
     def init(self):
         path0 = u.generate_path(0)
@@ -20,41 +19,32 @@ class VisualOdometry():
         data_frame_0 = u.extract_measurements(path0)
         data_frame_1 = u.extract_measurements(path1)
 
-        other_info_frame_0 = u.extract_other_info(path0)
-        other_info_frame_1 = u.extract_other_info(path1)
-        
-        #points0: frame 0, points1: frame1 --> (ID, (X,Y))
+        #points0: frame 0, points1: frame1 --> (id, (x,y))
         points0, points1, assoc = u.data_association(data_frame_0, 
                                                      data_frame_1)
         
+        #Extract only (x, y)
         p_0 = np.array([item[1] for item in points0])
         p_1 = np.array([item[1] for item in points1])
-
-        gt_0 = np.array(other_info_frame_0['Ground_Truths'])
-        gt_1 = np.array(other_info_frame_1['Ground_Truths'])
-
-        gt_dist = np.linalg.norm(gt_1 - gt_0)
 
         #Pose from 0 to 1
         R, t = u.compute_pose(p_0,
                               p_1,
-                              self.cam.K,
-                              gt_dist)
+                              self.cam.K)
         
         
         #3D points of the frame 0
-        points_3d = u.triangulate(R,
-                                  t,
-                                  p_0,
-                                  p_1,
-                                  self.cam.K,
-                                  assoc)
+        map = u.triangulate(R,
+                            t,
+                            p_0,
+                            p_1,
+                            self.cam.K,
+                            assoc)
         
         T_init = u.m2T(R,t)
         self.cam.setCameraPose(T_init)
-        self.solver.set_map(points_3d)
+        self.solver.set_map(map)
         self.prev_frame = data_frame_1
-        self.index_prev_frame = 1
 
         #Check
         if(np.linalg.det(R) != 1 or np.linalg.norm(t) == 0):
@@ -63,15 +53,21 @@ class VisualOdometry():
         return self.status
     
     def picp(self, assoc):
-        #Compute the dx
-        self.solver.one_round(assoc)
-        T_rel = u.v2T(self.solver.dx)
-        self.cam.updatePose(T_rel)
+        tolerance = 1e-2
+        while(True):
+            self.solver.one_round(assoc)
+            T_rel = u.v2T(self.solver.dx)
+            self.cam.updatePose(T_rel)
+
+            dx = self.solver.dx
+            dx_norm = np.linalg.norm(dx)
+            print(f"dx: {dx_norm}")
+            if(dx_norm < tolerance):
+                break
 
             
     def run(self, idx):
-        'Update pose from idx to idx+1'
-        idx+=1
+        'Update relative and absolute pose'
         path_curr = u.generate_path(idx)
         
         prev_frame = self.prev_frame
@@ -82,11 +78,14 @@ class VisualOdometry():
         #Initial guess
         self.solver.initial_guess(self.cam, self.solver.map(), points_prev)
 
+        #test(assoc, self.cam, self.solver.map(), points_curr)
+
         #picp
         self.picp(assoc)
+
+        #test(assoc, self.cam, self.solver.map(), points_curr)
         
         self.prev_frame = curr_frame
-        self.index_prev_frame+=1
 
 
 def test(assoc, camera, world_points, point_curr):

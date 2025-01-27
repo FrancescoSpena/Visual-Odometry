@@ -170,7 +170,7 @@ def g2T(v):
 
 def relativeMotion(T0, T1):
     'relative motion between two homogenous transformation'
-    'e.g. T1 = 0_T_1, T2 = 0_T_2 --> 1_T_2 = (0_T_1)^{-1} @ 0_T_2'
+    'e.g. T1 = 0_T_1, T2 = 0_T_2 --> 1_T_2 = inv(0_T_1) @ 0_T_2'
     return np.linalg.inv(T0) @ T1
 
 def errorEstimatedToGt(T_gt_rel, T_est_rel):
@@ -289,51 +289,58 @@ def triangulate(R, t, points1, points2, K, assoc):
     points2_hom = points2.T  
 
     points4D = cv2.triangulatePoints(P1, P2, points1_hom, points2_hom)
-    points3D_hom = points4D / points4D[3]  
-    points3D = points3D_hom[:3].T  
+    #New
+    points4D /= points4D[3]
+    points3D = P2 @ points4D #(x_cam, y_cam, z_cam)
+    points3D = points3D.T
+    
+    # points3D_hom = points4D / points4D[3]  
+    # points3D = points3D_hom[:3].T  
 
     points3D_with_indices = [(assoc[idx][0], points3D[idx]) for idx in range(len(points3D))]
 
     return points3D_with_indices
 
-def compute_pose(points1, points2, K, diff_gt, z_near=0.0, z_far=5.0):
+def compute_pose(points1, points2, K):
     'Compute E -> Pose'
     E, mask = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, threshold=1.0, prob=0.999)
     
-    points1 = points1[mask.ravel() == 1]
+    points1 = points1[mask.ravel() == 1]    
     points2 = points2[mask.ravel() == 1]
 
     _, R, t, _ = cv2.recoverPose(E, points1, points2, K)
 
-    def triangulate_and_check(R, t, points1, points2, K, z_near=0.0, z_far=5.2):
+    poss_sol = [(R, t), (R, -t), (R.T, t), (R.T, -t)]
+
+    def bestSolution(R, t, K, points1, points2):
+        def countPointsInFront(points4D, P):
+            points3D_cam = P @ points4D #(x_cam, y_cam, z_cam)
+            depths = points3D_cam[2]
+            return np.sum(depths > 0)
+
         P1 = K @ np.hstack((np.eye(3), np.zeros((3, 1))))
         P2 = K @ np.hstack((R, t))
+
+        points1 = points1.T
+        points2 = points2.T
+
+        points4D = cv2.triangulatePoints(P1, P2, points1, points2)
+        points4D /= points4D[3]
+
+        return countPointsInFront(points4D, P2)
+
         
-        points1_hom = points1.T  # Shape: (2, N)
-        points2_hom = points2.T  # Shape: (2, N)
-        points4D = cv2.triangulatePoints(P1, P2, points1_hom, points2_hom)
-        points3D = points4D / points4D[3]  # (x, y, z)
-        
-        z_values = points3D[2]
-
-        cheirality_check = np.all(z_values > 0)
-        tolerance = 1e-2
-        depth_check = np.all((z_values >= z_near) & (z_values <= z_far + tolerance))
-
-        return cheirality_check and depth_check
-
-    poss_sol = [(R, t), (R, -t), (R.T, t), (R.T, -t)]
+    best_R, best_t = np.eye(3), np.zeros((3,1))
+    max_points_in_front = -1
     
-    for i, (R_candidate, t_candidate) in enumerate(poss_sol):
-        vo_dist = np.linalg.norm(t_candidate)
-        scale = diff_gt / vo_dist
-        t_candidate *= scale
+    for R_cand, t_cand in poss_sol:
+        count_in_front = bestSolution(R_cand, t_cand, K, points1, points2)
+        if count_in_front > max_points_in_front:
+            max_points_in_front = count_in_front
+            best_R, best_t = R_cand, t_cand
 
-        if triangulate_and_check(R_candidate, t_candidate, points1, points2, K, z_near, z_far):
-            return R_candidate, t_candidate
+    return best_R, best_t
 
-    print("No sol.")
-    return np.eye(3), np.zeros((3, 1))
 
 def update_point(vector, target_idx, new_point):
     'Update point with ID=target_idx'
