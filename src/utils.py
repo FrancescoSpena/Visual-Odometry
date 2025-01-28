@@ -210,10 +210,16 @@ def v2T(v):
             [s, c, 0],
             [0, 0, 1]
         ])
+    
+    def angles2R(angles):
+        roll, pitch, yaw = angles
+        R = Rx(roll) @ Ry(pitch) @ Rz(yaw)
+        return R
 
-    T = np.eye(4, dtype=np.float32)  
-    T[:3, :3] = Rx(v[3]) @ Ry(v[4]) @ Rz(v[5])
-    T[:3, 3] = v[:3]
+    v = np.array(v).flatten()
+    T = np.eye(4)  
+    T[:3, :3] = angles2R(v[3:])  
+    T[:3, 3] = v[:3] 
     return T
 
 def plot_match(points1, points2):
@@ -282,24 +288,26 @@ def read_traj(path='../data/trajectory.dat'):
 
 def triangulate(R, t, points1, points2, K, assoc):
     'Return a list of 3d points (ID, (X, Y, Z))'
+    'assoc = (ID, best_ID)'
+    
     P1 = K @ np.hstack((np.eye(3), np.zeros((3, 1))))
     P2 = K @ np.hstack((R, t))
 
-    points1_hom = points1.T  
-    points2_hom = points2.T  
+    points1 = points1.T  
+    points2 = points2.T  
 
-    points4D = cv2.triangulatePoints(P1, P2, points1_hom, points2_hom)
-    #New
-    points4D /= points4D[3]
-    points3D = P2 @ points4D #(x_cam, y_cam, z_cam)
-    points3D = points3D.T
+    points4D = cv2.triangulatePoints(P1, P2, points1, points2)
     
-    # points3D_hom = points4D / points4D[3]  
-    # points3D = points3D_hom[:3].T  
+    points4D /= points4D[3]    # x /= w
+    points3D = points4D[:3].T  # (N x 3)
 
-    points3D_with_indices = [(assoc[idx][0], points3D[idx]) for idx in range(len(points3D))]
 
-    return points3D_with_indices
+    id_points3D = []
+    ids = [pair[0] for pair in assoc]
+    for i, point in enumerate(points3D):
+        id_points3D.append((ids[i], point))
+
+    return id_points3D
 
 def compute_pose(points1, points2, K):
     'Compute E -> Pose'
@@ -316,7 +324,11 @@ def compute_pose(points1, points2, K):
         def countPointsInFront(points4D, P):
             points3D_cam = P @ points4D #(x_cam, y_cam, z_cam)
             depths = points3D_cam[2]
-            return np.sum(depths > 0)
+            count = 0
+            for d in depths: 
+                if (d > 0):
+                    count += 1
+            return count
 
         P1 = K @ np.hstack((np.eye(3), np.zeros((3, 1))))
         P2 = K @ np.hstack((R, t))
@@ -366,10 +378,11 @@ def skew(v):
     ])
 
 def w2C(world_point, camera_pose):
-    'From world point to camera point'
+    'Return p_cam'
 
-    world_point_h = np.append(world_point, 1)
-    camera_point = camera_pose @ world_point_h
-    camera_point = camera_point[:3] / camera_point[3]
+    world_point = np.append(world_point, 1)
 
-    return camera_point
+    p_cam = camera_pose @ world_point
+
+    return p_cam[:3]
+

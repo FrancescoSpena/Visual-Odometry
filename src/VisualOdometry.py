@@ -53,17 +53,7 @@ class VisualOdometry():
         return self.status
     
     def picp(self, assoc):
-        tolerance = 1e-2
-        while(True):
-            self.solver.one_round(assoc)
-            T_rel = u.v2T(self.solver.dx)
-            self.cam.updatePose(T_rel)
-
-            dx = self.solver.dx
-            dx_norm = np.linalg.norm(dx)
-            print(f"dx: {dx_norm}")
-            if(dx_norm < tolerance):
-                break
+        pass
 
             
     def run(self, idx):
@@ -75,69 +65,75 @@ class VisualOdometry():
 
         points_prev, points_curr, assoc = u.data_association(prev_frame,curr_frame)
 
-        #Initial guess
-        self.solver.initial_guess(self.cam, self.solver.map(), points_prev)
+        #test(self.cam, world_points=self.solver.map(), points=points_curr, assoc=assoc)
+        
+        for _ in range(1, 300):
+            self.solver.initial_guess(self.cam, self.solver.getMap(), points_prev)
+            self.solver.one_round(assoc)
+            self.cam.updatePose(self.solver.dx)
 
-        #test(assoc, self.cam, self.solver.map(), points_curr)
 
-        #picp
-        self.picp(assoc)
+        #test(self.cam, world_points=self.solver.map(), points=points_curr, assoc=assoc)
 
-        #test(assoc, self.cam, self.solver.map(), points_curr)
+        
+        # I want to transformation from frame i and frame i+1
+        
+        # T = self.cam.relativePose()
+        # R, t = u.T2m(T)
+        
+        # p_0 = np.array([item[1] for item in points_prev])
+        # p_1 = np.array([item[1] for item in points_curr])
+        
+        # update_map = u.triangulate(R, t, p_0, p_1, self.cam.cameraMatrix(), assoc)
+        # self.solver.set_map(update_map)
+        
         
         self.prev_frame = curr_frame
 
 
-def test(assoc, camera, world_points, point_curr):
-    projected_points = []
 
-    for _, idx_frame2 in assoc: 
-        world_point = u.get_point(world_points, idx_frame2)
-        if world_point is None: 
-            continue
+def test(cam, world_points, points, assoc):
+    image_points = []
+    ids = []
 
-        predicted_image_point, is_valid =  camera.project_point(world_point)
+    curr = []
+    ids_curr = []
 
-        if not is_valid:
-            continue
-        else:
-            projected_points.append((idx_frame2, predicted_image_point))
+    # world_points = (id, point) but the id is refered to the frame i
+    # take the 3D point and project it in the frame i+1 with id = best_id, because in this frame the 2D point
+    # associate with the 3D point in the frame i has id in the frame i+1 equal to best_id
+    for (_, point), (_, best_id) in zip(world_points, assoc):
+        point_in_the_image, is_valid = cam.project_point(point)
+        if(is_valid):
+            image_points.append(point_in_the_image)
+            ids.append(best_id)
 
-    visualize_projections_with_id(projected_points, point_curr)
+    for id, point in points:
+        curr.append(point)
+        ids_curr.append(id)
 
-def visualize_projections_with_id(projected_points, points_curr):
-    x_proj, y_proj = [], []
-    x_obs, y_obs = [], []
+    image_points = np.array(image_points)
+    curr = np.array(curr)
 
-    projected_dict = {point[0]: point[1] for point in projected_points}
-    observed_dict = {point[0]: point[1] for point in points_curr}
+    plt.figure(figsize=(12, 8))
+    
+    plt.scatter(image_points[:, 0], image_points[:, 1], c='red', label='Projected Points')
+    for idx, (x, y) in zip(ids, image_points):
+        plt.text(x, y, str(idx), color='blue', fontsize=8)
+    
+    plt.scatter(curr[:, 0], curr[:, 1], c='green', label='Current Points')
+    for idx, (x, y) in zip(ids_curr, curr):
+        plt.text(x, y, str(idx), color='orange', fontsize=8)
+    
+    for id_proj, (x_proj, y_proj) in zip(ids, image_points):
+        for id_curr, (x_curr, y_curr) in zip(ids_curr, curr):
+            if id_proj == id_curr:  # Match points with the same ID
+                plt.plot([x_proj, x_curr], [y_proj, y_curr], 'k--', linewidth=0.8)  # Dashed line
 
-    common_ids = set(projected_dict.keys()).intersection(observed_dict.keys())
-    for point_id in common_ids:
-        proj = projected_dict[point_id]
-        obs = observed_dict[point_id]
-
-        x_proj.append(proj[0])
-        y_proj.append(proj[1])
-        x_obs.append(obs[0])
-        y_obs.append(obs[1])
-
-    if not x_proj or not x_obs:
-        print("Nessun punto valido da visualizzare.")
-        return
-
-    plt.figure(figsize=(10, 8))
-    plt.scatter(x_obs, y_obs, c='red', label='Punti osservati', alpha=0.7, s=30)
-    plt.scatter(x_proj, y_proj, c='blue', label='Punti proiettati', alpha=0.7, s=30)
-
-    for i, point_id in enumerate(common_ids):
-        plt.plot([x_obs[i], x_proj[i]], [y_obs[i], y_proj[i]], 'k--', linewidth=0.7, alpha=0.6)
-        plt.text(x_obs[i], y_obs[i], str(point_id), fontsize=8, color='red')
-        plt.text(x_proj[i], y_proj[i], str(point_id), fontsize=8, color='blue')
-
-    plt.xlabel("Coordinata X (pixel)")
-    plt.ylabel("Coordinata Y (pixel)")
-    plt.title("Confronto tra punti osservati e proiettati (con ID e connessioni)")
+    plt.title('Projected and Current Points on Image Plane')
+    plt.xlabel('X (Image)')
+    plt.ylabel('Y (Image)')
+    plt.gca().invert_yaxis()  # Invert Y-axis for image coordinates
     plt.legend()
     plt.grid(True)
     plt.show()

@@ -20,7 +20,7 @@ if __name__ == "__main__":
     
     print(f"from frame {0} to frame {1}")
     print("-------------Estimation------------")
-    print(f"T: {T}")
+    print(f"T:\n {T}")
     print("-------------Ground Truth----------")
     T_gt_rel = u.g2T(gt[0])
     print(f"T: \n {T_gt_rel}")
@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
     print(f"from frame {1} to frame {2}")
     print("-------------Estimation------------")
-    print(f"T: {T}")
+    print(f"T:\n {T}")
     print("-------------Ground Truth----------")
     T01 = u.g2T(gt[0])
     T02 = u.g2T(gt[1])

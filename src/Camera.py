@@ -22,10 +22,10 @@ class Camera():
         'Return the relative pose (from frame i to frame i+1)'
         return self.T_rel
     
-    def updatePose(self, T_rel):
+    def updatePose(self, dx):
         'Update pose (from 0 to frame i+1 and save T_rel)'
-        self.T_rel = T_rel
-        self.T_abs = self.T_abs @ self.T_rel
+        self.T_rel = u.v2T(dx)
+        self.T_abs = u.v2T(dx) @ self.T_abs
     
     def setCameraPose(self, pose):
         'Update the absolute pose with the pose (T_abs=pose)'
@@ -36,25 +36,50 @@ class Camera():
         'Return the camera matrix'
         return self.K
     
+    def proj(self, u):
+        'prospective projection'
+        return np.array([u[0]/u[2], u[1]/u[2]])
+
     def project_point(self, world_point, width=640, height=480, z_near=0, z_far=5): 
         'Project on the image the world_point=world_point'
-        image_point = np.zeros((2,))
-        world_point_h = np.append(world_point, 1)
-        camera_point = self.absolutePose() @ world_point_h
-        camera_point = camera_point[:3] / camera_point[3]
+        'image_point = proj(K T_cam^-1 * world_point)'
+        'proj(u) = (ux / uz     uy / uz)'
 
-        if camera_point[2] <= z_near or camera_point[2] > z_far + self.tolerance:
-            return image_point, False
+        w_T_c = self.absolutePose()
+        world_point = np.append(world_point, 1)
         
-        projected_point = self.cameraMatrix() @ camera_point
-        image_point = projected_point[:2] * (1. / projected_point[2])
+        # (4 x 1)
+        p_cam = w_T_c @ world_point
 
-        if image_point[0] < 0 or image_point[0] > width-1: 
-            return image_point, False 
-        if image_point[1] < 0 or image_point[1] > height-1:
-            return image_point, False
+        z = p_cam[2]
+
+        if(z <= z_near):
+            # print("Point out of camera view")
+            # print(f"z: {z}")
+            # print("-------------------")
+            return None, False
         
+        # (3 x 1)
+        image_point = self.cameraMatrix() @ p_cam[:3]
+        
+        # (2 x 1)
+        image_point = self.proj(image_point)
+
+        x = image_point[0]
+        y = image_point[1]
+
+        if(x < 0 or x > width-1):
+            # print("Point out of image size")
+            # print(f"x: {x}")
+            # print("-------------------")
+            return None, False 
+        
+        if(y < 0 or y > height-1):
+            # print("Point out of image size")
+            # print(f"y: {y}")
+            # print("-------------------")
+            return None, False 
+
+        # print("VALID")
+        # print("================")
         return image_point, True
-
-
-
