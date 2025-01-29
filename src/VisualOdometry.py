@@ -11,6 +11,7 @@ class VisualOdometry():
         self.cam = camera.Camera(K)
         self.solver = solver.PICP(self.cam)
         self.status = True
+        self.prev_frame = None
 
     def init(self):
         path0 = u.generate_path(0)
@@ -18,20 +19,15 @@ class VisualOdometry():
 
         data_frame_0 = u.extract_measurements(path0)
         data_frame_1 = u.extract_measurements(path1)
+        assoc = u.data_association(data_frame_0, data_frame_1)
 
-        #points0: frame 0, points1: frame1 --> (id, (x,y))
-        points0, points1, assoc = u.data_association(data_frame_0, 
-                                                     data_frame_1)
+        p_0, p_1 = u.makePoints(data_frame_0, data_frame_1, assoc)
         
-        #Extract only (x, y)
-        p_0 = np.array([item[1] for item in points0])
-        p_1 = np.array([item[1] for item in points1])
-
+         
         #Pose from 0 to 1
         R, t = u.compute_pose(p_0,
                               p_1,
                               self.cam.K)
-        
         
         #3D points of the frame 0
         map = u.triangulate(R,
@@ -47,30 +43,32 @@ class VisualOdometry():
         self.prev_frame = data_frame_1
 
         #Check
-        if(np.linalg.det(R) != 1 or np.linalg.norm(t) == 0):
+        if(not np.isclose(np.linalg.det(R), 1, atol=1e-6) or np.linalg.norm(t) == 0):
+            print(f"det(R): {np.linalg.det(R)}")
+            print(f"norm(t): {np.linalg.norm(t)}")
             self.status = False
         
         return self.status
-    
-    def picp(self, assoc):
-        pass
-
-            
+              
     def run(self, idx):
         'Update relative and absolute pose'
-        path_curr = u.generate_path(idx)
+        pass
+        # path_curr = u.generate_path(idx)
         
-        prev_frame = self.prev_frame
-        curr_frame = u.extract_measurements(path_curr)
+        # prev_frame = self.prev_frame
+        # curr_frame = u.extract_measurements(path_curr)
 
-        points_prev, points_curr, assoc = u.data_association(prev_frame,curr_frame)
+        # points_prev, points_curr, assoc = u.data_association(prev_frame,curr_frame)
 
-        #test(self.cam, world_points=self.solver.map(), points=points_curr, assoc=assoc)
+        # if(points_prev is None or points_curr is None or assoc is None):
+        #     return
+
+        #test(self.cam, world_points=self.solver.getMap(), points=points_prev, assoc=assoc)
         
-        for _ in range(1, 300):
-            self.solver.initial_guess(self.cam, self.solver.getMap(), points_prev)
-            self.solver.one_round(assoc)
-            self.cam.updatePose(self.solver.dx)
+        # for _ in range(1, 300):
+        #     self.solver.initial_guess(self.cam, self.solver.getMap(), points_prev)
+        #     self.solver.one_round(assoc)
+        #     self.cam.updatePose(self.solver.dx)
 
 
         #test(self.cam, world_points=self.solver.map(), points=points_curr, assoc=assoc)
@@ -88,8 +86,35 @@ class VisualOdometry():
         # self.solver.set_map(update_map)
         
         
-        self.prev_frame = curr_frame
+        #self.prev_frame = curr_frame
 
+
+def test_assoc(points1, points2, assoc):
+    if points1.shape != points2.shape or points1.shape[0] != len(assoc):
+        raise ValueError("points1, points2, and assoc must have the same length")
+    
+    plt.figure(figsize=(12, 8))
+
+    for i, (p1, p2) in enumerate(zip(points1, points2)):
+        id1, id2 = assoc[i]  # Extract IDs from assoc
+        
+        # Draw dashed line
+        plt.plot([p1[0], p2[0]], [p1[1], p2[1]], linestyle='dashed', color='black', alpha=0.2)
+        
+        # Display IDs near the points
+        plt.text(p1[0], p1[1], f"{id1}", fontsize=8, color='red', verticalalignment='bottom', horizontalalignment='right')
+        plt.text(p2[0], p2[1], f"{id2}", fontsize=8, color='blue', verticalalignment='bottom', horizontalalignment='left')
+
+    # Plot points
+    plt.scatter(points1[:, 0], points1[:, 1], color='red', label='points1')
+    plt.scatter(points2[:, 0], points2[:, 1], color='blue', label='points2')
+
+    plt.legend()
+    plt.xlabel("X")
+    plt.ylabel("Y")
+    plt.title("Dashed Line Associations with IDs")
+    plt.grid(True)
+    plt.show()
 
 
 def test(cam, world_points, points, assoc):

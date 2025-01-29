@@ -91,15 +91,22 @@ def create_new_frame(frame, points):
 
     return updated_result
 
-def plot_associations(frame1, frame2, points1, points2):
-    plt.scatter(frame1['Image_X'], frame1['Image_Y'], c='blue', label='Frame 1')
-    plt.scatter(frame2['Image_X'], frame2['Image_Y'], c='red', label='Frame 2')
-    for (id1, point1), (id2, point2) in zip(points1, points2):
-        plt.plot([point1[0], point2[0]], [point1[1], point2[1]], 'k--', alpha=0.5)
+def plot_data_association(points1, points2, assoc):
+    plt.figure(figsize=(8, 6))
+    
+    plt.scatter(points1[:, 0], points1[:, 1], c='blue', label='Frame 1', marker='o', alpha=0.7)
+    
+    plt.scatter(points2[:, 0], points2[:, 1], c='red', label='Frame 2', marker='x', alpha=0.7)
+    
+    for i in range(0,len(assoc)):
+        x_values = [points1[i], points2[i]]
+        y_values = [points1[i], points2[i]]
+        plt.plot(x_values, y_values, 'k--', alpha=0.6)  # Dashed line between associated points
+    
     plt.legend()
-    plt.title("Data Associations")
     plt.xlabel("X")
     plt.ylabel("Y")
+    plt.title("2D Data Association Visualization")
     plt.grid(True)
     plt.show()
 
@@ -125,6 +132,16 @@ points_2d_frame2 = transform_2d_points(points_2d_frame1, R, t)
 frame2 = create_new_frame(frame1, points_2d_frame1)
 
 #Data association
-points1, points2, assoc = u.data_association(frame1, frame2)
+assoc = u.data_association(frame1, frame2)
 
+points1, points2 = u.makePoints(frame1, frame2, assoc)
 
+# for i, (id, best) in enumerate(assoc): 
+#     x, y = points1[i]
+#     x2, y2 = points2[i]
+
+#     print(f"{id} --> {best}")
+#     print(f"id: {id}, x: {x}, y: {y}")
+#     print(f"id: {best}, x: {x2}, y: {y2}")
+
+plot_data_association(points1, points2, assoc)

@@ -222,58 +222,57 @@ def v2T(v):
     T[:3, 3] = v[:3] 
     return T
 
-def plot_match(points1, points2):
-    'Plot points'
-    import matplotlib.pyplot as plt
+def data_association(first_data, second_data):
+    '''
+    return {
+        'Point_IDs': df_points['Point_ID'].tolist(),
+        'Actual_IDs': df_points['Actual_ID'].tolist(),
+        'Image_X': df_points['Image_X'].tolist(),
+        'Image_Y': df_points['Image_Y'].tolist(),
+        'Appearance_Features': df_points['Appearance_Features'].tolist()
+    }
+
+    Point_IDs è un indice progressivo che indica quante misure hai in una singola immagine
     
-    # Extract 2D points and IDs from (id, point_2d)
-    points1_2d = np.array([p[1] for p in points1])
-    points2_2d = np.array([p[1] for p in points2])
-    ids1 = [p[0] for p in points1]
-    ids2 = [p[0] for p in points2]
-
-    plt.figure()
-    plt.scatter(points1_2d[:, 0], points1_2d[:, 1], label="Frame 1")
-    plt.scatter(points2_2d[:, 0], points2_2d[:, 1], label="Frame 2")
-
-    # Annotate IDs for Frame 1
-    for i, txt in enumerate(ids1):
-        plt.annotate(txt, (points1_2d[i, 0], points1_2d[i, 1]), fontsize=8, color='blue')
-
-    # Annotate IDs for Frame 2
-    for i, txt in enumerate(ids2):
-        plt.annotate(txt, (points2_2d[i, 0], points2_2d[i, 1]), fontsize=8, color='orange')
-
-    plt.legend()
-    plt.title("Matched Points")
-    plt.show()
-
-def data_association(first_data, second_data, threshold=0.2):
-    'Perform data association, return point1 = (ID, (X,Y)), point2 = (ID, (X,Y)), assoc = (ID, best_ID)'
-    associations = []
+    Actual_IDs è un indice UNIVOCO considerando tutti i punti nel mondo
     
-    for i, actual_id1 in enumerate(first_data['Actual_IDs']):
-        candidate_indices = [j for j, actual_id2 in enumerate(second_data['Actual_IDs']) if actual_id1 == actual_id2]
+    Appearance descrive il punto nell'immagine. Idealmente hai la stessa appearance ogni volta che misuri lo STESSO punto.
+    In pratica non succede e bisogna prendere quello a minimum distance (cosine similarity)
+    '''
+
+    actual_id_first_frame = first_data['Actual_IDs']
+    point_id = first_data['Point_IDs']
+    num_points_first_data = len(point_id)
+    appearance_first_data = first_data['Appearance_Features']
+
+    actual_id_second_frame = second_data['Actual_IDs']
+    point_id_second_frame = second_data['Point_IDs']
+    num_points_second_data = len(point_id_second_frame)
+    appearance_second_data = first_data['Appearance_Features']
+    assoc = []
+
+    min_distance = float('inf')
+
+    id_temp_first_frame = -1 
+    id_temp_second_frame = -1
+
+    for i in range(0, num_points_first_data):
+        for j in range(0, num_points_second_data): 
+            app_esim = appearance_first_data[i]
+            app_jesim = appearance_second_data[j]
+
+            distance = cosine(app_esim, app_jesim)
+
+            if distance < min_distance:
+                min_distance = distance
+                id_temp_first_frame = actual_id_first_frame[i]
+                id_temp_second_frame = actual_id_second_frame[j]
         
-        if len(candidate_indices) == 1:
-            associations.append((i, candidate_indices[0]))
-        elif len(candidate_indices) > 1:
-            min_distance = float('inf')
-            best_match_idx = None
-            
-            for j in candidate_indices:
-                distance = cosine(first_data['Appearance_Features'][i], second_data['Appearance_Features'][j])
-                if distance < min_distance:
-                    min_distance = distance
-                    best_match_idx = j
-            
-            if min_distance < threshold:
-                associations.append((i, best_match_idx))
+        assoc.append((id_temp_first_frame, id_temp_second_frame))
+        min_distance = float('inf')
+        
 
-    points_first = [(i, np.array([first_data['Image_X'][i], first_data['Image_Y'][i]])) for i, _ in associations]
-    points_second = [(j, np.array([second_data['Image_X'][j], second_data['Image_Y'][j]])) for _, j in associations]
-
-    return points_first, points_second, associations
+    return assoc 
 
 def read_traj(path='../data/trajectory.dat'):
     'Read the trajectory file'
@@ -300,7 +299,6 @@ def triangulate(R, t, points1, points2, K, assoc):
     
     points4D /= points4D[3]    # x /= w
     points3D = points4D[:3].T  # (N x 3)
-
 
     id_points3D = []
     ids = [pair[0] for pair in assoc]
@@ -338,7 +336,7 @@ def compute_pose(points1, points2, K):
 
         points4D = cv2.triangulatePoints(P1, P2, points1, points2)
         points4D /= points4D[3]
-
+        
         return countPointsInFront(points4D, P2)
 
         
@@ -347,26 +345,47 @@ def compute_pose(points1, points2, K):
     
     for R_cand, t_cand in poss_sol:
         count_in_front = bestSolution(R_cand, t_cand, K, points1, points2)
-        if count_in_front > max_points_in_front:
+        if count_in_front >= max_points_in_front:
             max_points_in_front = count_in_front
             best_R, best_t = R_cand, t_cand
 
     return best_R, best_t
 
 
-def update_point(vector, target_idx, new_point):
-    'Update point with ID=target_idx'
-    for i in range(len(vector)):
-        if vector[i][0] == target_idx:
-            vector[i] = (vector[i][0], new_point)
-            return True 
-    return False
+def makePoints(data_frame0, data_frame1, assoc):
+    '''
+    Return two numpy array p0 = (x0, y0), p1 = (x1, y1) with the i-esim element of p0 is the coord. of
+    the point with app_id = id and i-esim element of p1 is the coord. of the point with app_id = best_id
+    '''
+    p0 = []
+    p1 = []
 
-def get_point(vector, target_idx):
-    'Return the point with the ID=target_idx'
-    for idx, point in vector: 
-        if idx == target_idx:
-            return point
+    for elem in assoc:
+            id, best = elem
+            point0 = get_point(data_frame0, id)
+            point1 = get_point(data_frame1, best)
+
+            if(point0 is not None and point1 is not None):
+                p0.append(point0)
+                p1.append(point1)
+
+    p0 = np.array(p0)
+    p1 = np.array(p1)
+
+    return p0, p1
+
+def get_point(data, id):
+    actual_id = data['Actual_IDs']
+    point_id = data['Point_IDs']
+    num_points = len(point_id)
+    x = data['Image_X']
+    y = data['Image_Y']
+
+    for i in range(0, num_points):
+        actual = actual_id[i]
+        if(actual == id):
+            return x[i], y[i]
+    
     return None
 
 def skew(v):
