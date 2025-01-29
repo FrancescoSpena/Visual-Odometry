@@ -42,19 +42,30 @@ if __name__ == "__main__":
 
     'from frame 1 to 2'
     'idx=index of the next frame'
-    # v.run(2)
-    # #Relative pose (from frame 1 to frame 2)
-    # T = v.cam.relativePose()
+    v.run(2)
+    T_abs = v.cam.absolutePose()
 
-    # print(f"from frame {1} to frame {2}")
-    # print("-------------Estimation------------")
-    # print(f"T:\n {T}")
-    # print("-------------Ground Truth----------")
-    # T01 = u.g2T(gt[0])
-    # T02 = u.g2T(gt[1])
-    # T_gt_rel = u.relativeMotion(T01, T02)
-    # print(f"T: \n {T_gt_rel}")
+    print("\n")
+    print(f"from frame {1} to frame {2}")
+    print("-------------Estimation------------")
+    print(f"T_abs:\n {T_abs}")
+    print("-------------Ground Truth----------")
+    T02 = u.g2T(gt[2])
+    print(f"T: \n {T02}")
+    print("\n")
+
+    # v.run(3)
+    # T_abs = v.cam.absolutePose()
+
     # print("\n")
+    # print(f"from frame {2} to frame {3}")
+    # print("-------------Estimation------------")
+    # print(f"T_abs:\n {T_abs}")
+    # print("-------------Ground Truth----------")
+    # T02 = u.g2T(gt[3])
+    # print(f"T: \n {T02}")
+    # print("\n")
+
 
 
 

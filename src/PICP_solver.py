@@ -15,21 +15,17 @@ class PICP():
         self.min_num_inliers = 0
         self.damping = 0.1
     
-    def initial_guess(self, camera, world_points, point_curr_frame):
+    def initial_guess(self, camera, world_points, point_prev_frame):
         'Set the map and image points in a ref values'
         self.world_points = world_points
-        self.image_points = point_curr_frame
+        self.image_points = point_prev_frame
         self.camera = camera
     
     def error_and_jacobian(self, world_point, reference_image_point):
         'Compute error and jacobian given the 3D point and 2D point'
-        status = True
 
         K = self.camera.cameraMatrix()
 
-        fx = K[0, 0]
-        fy = K[1, 1]
-        
         predicted_image_point, is_valid = self.camera.project_point(world_point)
         
         if (is_valid == False):
@@ -44,37 +40,33 @@ class PICP():
         # (x_cam, y_cam, z_cam)
         camera_point = u.w2C(world_point, self.camera.absolutePose())
 
-        x_cam = camera_point[0]
-        y_cam = camera_point[1]
-        z_cam = camera_point[2]
-        
-        J = np.zeros((2,6))
+        Jr = np.zeros((3,6))
+        Jr[:3, :3] = np.eye(3)
+        Jr[:3, 3:6] = u.skew(-camera_point)
 
-        first_col = np.array([fx / z_cam, 0])
-        second_col = np.array([0, fy / z_cam])
-        third_col = np.array([-fx * (x_cam / (z_cam**2)), -fy * (y_cam / (z_cam**2))])
-        four_col = np.array([fx * ((x_cam * y_cam) / (z_cam**2)), fy * (1 + ((y_cam)**2) / (z_cam**2))])
-        five_col = np.array([-fx * (1 + ((x_cam)**2) / (z_cam**2)), -fy * ((y_cam * x_cam) / (z_cam**2))])
-        six_col = np.array([fx * (y_cam / z_cam), -fy * (x_cam / z_cam)])
+        phom = K @ camera_point
+        iz = 1./phom[2]
+        iz2 = iz ** 2 
 
+        Jp = np.zeros((2,3))
+        Jp[0, :] = [iz, 0, -phom[0] * iz2]
+        Jp[1, :] = [0, iz, -phom[1] * iz2]
 
-        J = np.column_stack((first_col, 
-                             second_col, 
-                             third_col, 
-                             four_col, 
-                             five_col, 
-                             six_col))
-        
-        return error, J, status
+        # (2, 6) = (2 x 3) * (3 x 3) * (3 x 6)
+        J = Jp @ K @ Jr
+      
+        return error, J, True
     
     def linearize(self, assoc):
         'Linearize the system and return H and b'
         H = np.zeros((6,6))
         b = np.zeros((6,1))
 
-        for _, best_id in assoc: 
-            world_point = u.get_point(self.world_points,best_id)
-            image_point = u.get_point(self.image_points,best_id)
+        for i, (id, best_id) in enumerate(assoc):
+            curr_idx = best_id
+            
+            world_point = u.getPoint3D(self.world_points,curr_idx)
+            image_point = self.image_points[i]
 
             if world_point is None or image_point is None:
                 continue

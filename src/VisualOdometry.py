@@ -29,7 +29,7 @@ class VisualOdometry():
                               p_1,
                               self.cam.K)
         
-        #3D points of the frame 0
+        #3D points
         map = u.triangulate(R,
                             t,
                             p_0,
@@ -52,41 +52,28 @@ class VisualOdometry():
               
     def run(self, idx):
         'Update relative and absolute pose'
-        pass
-        # path_curr = u.generate_path(idx)
+        path_curr = u.generate_path(idx)
         
-        # prev_frame = self.prev_frame
-        # curr_frame = u.extract_measurements(path_curr)
+        prev_frame = self.prev_frame
+        curr_frame = u.extract_measurements(path_curr)
 
-        # points_prev, points_curr, assoc = u.data_association(prev_frame,curr_frame)
+        assoc = u.data_association(prev_frame,curr_frame)
 
-        # if(points_prev is None or points_curr is None or assoc is None):
-        #     return
-
-        #test(self.cam, world_points=self.solver.getMap(), points=points_prev, assoc=assoc)
-        
-        # for _ in range(1, 300):
-        #     self.solver.initial_guess(self.cam, self.solver.getMap(), points_prev)
-        #     self.solver.one_round(assoc)
-        #     self.cam.updatePose(self.solver.dx)
+        points_prev, points_curr = u.makePoints(prev_frame, curr_frame, assoc)
 
 
-        #test(self.cam, world_points=self.solver.map(), points=points_curr, assoc=assoc)
+        for _ in range(10):
+            self.solver.initial_guess(self.cam, self.solver.getMap(), points_prev)
+            self.solver.one_round(assoc)
+            self.cam.updatePose(self.solver.dx)
 
-        
-        # I want to transformation from frame i and frame i+1
-        
-        # T = self.cam.relativePose()
+        # T = self.cam.absolutePose()
         # R, t = u.T2m(T)
+        # map = u.triangulate(R, t, points_prev, points_curr, self.cam.cameraMatrix(), assoc)
         
-        # p_0 = np.array([item[1] for item in points_prev])
-        # p_1 = np.array([item[1] for item in points_curr])
-        
-        # update_map = u.triangulate(R, t, p_0, p_1, self.cam.cameraMatrix(), assoc)
-        # self.solver.set_map(update_map)
-        
-        
-        #self.prev_frame = curr_frame
+        # self.solver.set_map(map)
+        # self.prev_frame = curr_frame
+
 
 
 def test_assoc(points1, points2, assoc):
@@ -133,7 +120,7 @@ def test(cam, world_points, points, assoc):
             image_points.append(point_in_the_image)
             ids.append(best_id)
 
-    for id, point in points:
+    for (id, _), (point) in zip(assoc, points):
         curr.append(point)
         ids_curr.append(id)
 

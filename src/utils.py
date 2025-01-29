@@ -388,6 +388,14 @@ def get_point(data, id):
     
     return None
 
+def getPoint3D(points, id):
+
+    for id_point, point in points:
+        if(id_point == id):
+            return point 
+    
+    return None
+
 def skew(v):
     'Convert a vector in a skew-symmetric matrix'
     return np.array([

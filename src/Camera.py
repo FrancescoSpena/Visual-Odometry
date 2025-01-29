@@ -4,7 +4,6 @@ import utils as u
 class Camera():
     def __init__(self, K, z_near=0, z_far=5, width=640, height=480):
         self.T_abs = np.eye(4)
-        self.T_rel = np.eye(4)
         
         self.K = K
         
@@ -18,13 +17,8 @@ class Camera():
         'Return the absolute pose (from frame 0 to frame i+1)'
         return self.T_abs
 
-    def relativePose(self):
-        'Return the relative pose (from frame i to frame i+1)'
-        return self.T_rel
-    
     def updatePose(self, dx):
         'Update pose (from 0 to frame i+1 and save T_rel)'
-        self.T_rel = u.v2T(dx)
         self.T_abs = u.v2T(dx) @ self.T_abs
     
     def setCameraPose(self, pose):
@@ -83,3 +77,9 @@ class Camera():
         # print("VALID")
         # print("================")
         return image_point, True
+    
+    def unprojectPixelToRay(self, pixel):
+        pixel_h = np.array([pixel[0], pixel[1], 1])
+        ray_direction = np.linalg.inv(self.cameraMatrix()) @ pixel_h
+        ray_direction /= np.linalg.norm(ray_direction)
+        return ray_direction
