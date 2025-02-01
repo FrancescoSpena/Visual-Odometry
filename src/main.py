@@ -65,7 +65,7 @@ if __name__ == "__main__":
     print("\n")
 
 
-    iter = 3
+    iter = 10
     for i in range(2, iter): 
         v.run(i)
         T_abs = v.cam.absolutePose()

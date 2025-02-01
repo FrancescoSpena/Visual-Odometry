@@ -23,7 +23,6 @@ class VisualOdometry():
 
         p_0, p_1 = u.makePoints(data_frame_0, data_frame_1, assoc)
         
-         
         #Pose from 0 to 1
         R, t = u.compute_pose(p_0,
                               p_1,
@@ -73,35 +72,35 @@ class VisualOdometry():
 
         self.prev_frame = curr_frame
 
-        #Update the map
-        map = self.solver.getMap()
+        # #Update the map
+        # map = self.solver.getMap()
 
-        #3D points of the frame prev and curr
-        T = self.cam.relativePose()
-        R, t = u.T2m(T)
+        # #3D points of the frame prev and curr
+        # T = self.cam.relativePose()
+        # R, t = u.T2m(T)
 
-        #Obtain a 3D points of the missing points
-        missing_map = u.triangulate(R, t, points_prev, points_curr,
-                                    self.cam.cameraMatrix(), assoc)
+        # #Obtain a 3D points of the missing points
+        # missing_map = u.triangulate(R, t, points_prev, points_curr,
+        #                             self.cam.cameraMatrix(), assoc)
         
         
-        #ID of the points that its already on the map
-        id_map = [elem[0] for elem in map]
-        #ID of the map between the prev and curr frame
-        id_missing_map = [elem[0] for elem in missing_map]
+        # #ID of the points that its already on the map
+        # id_map = [elem[0] for elem in map]
+        # #ID of the map between the prev and curr frame
+        # id_missing_map = [elem[0] for elem in missing_map]
 
-        #ID of the 3D points that are not in the map
-        missing = [item for item in id_missing_map if item not in set(id_map)]
+        # #ID of the 3D points that are not in the map
+        # missing = [item for item in id_missing_map if item not in set(id_map)]
 
-        #Take the 3D points that are not in the map and extend the map
-        missing_points = []
-        for id in missing: 
-            point = u.getPoint3D(missing_map, id)
-            if(point is not None):
-                missing_points.append((id, point))
+        # #Take the 3D points that are not in the map and extend the map
+        # missing_points = []
+        # for id in missing: 
+        #     point = u.getPoint3D(missing_map, id)
+        #     if(point is not None):
+        #         missing_points.append((id, point))
 
-        map.extend(missing_points)
-        self.solver.setMap(map)
+        # map.extend(missing_points)
+        # self.solver.setMap(map)
 
 
 

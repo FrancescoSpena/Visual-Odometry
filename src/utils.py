@@ -7,8 +7,57 @@ from scipy.optimize import least_squares
 from scipy.spatial.distance import cosine
 from scipy.spatial import KDTree
 
-
 def extract_measurements(file_path):
+    point_data = []
+    started = False
+
+    with open(file_path, 'r') as f: 
+        for line in f: 
+            line = line.strip()
+            if not line: 
+                continue
+            
+            if line.startswith("point"):
+                tokens = line.split()
+                # Expected tokens:
+                # tokens[0]: "point"
+                # tokens[1]: POINT_ID_CURRENT_MEASUREMENT
+                # tokens[2]: ACTUAL_POINT_ID
+                # tokens[3]: IMAGE_X coordinate
+                # tokens[4]: IMAGE_Y coordinate
+                # tokens[5:]: APPEARANCE features
+                if(len(tokens) < 5):
+                    continue
+
+                point_id = tokens[1]
+                actual_id = tokens[2]
+                image_x = tokens[3]
+                image_y = tokens[4]
+                appearance = tokens[5:]
+
+                point_data.append({
+                    'Point_ID': point_id,
+                    'Actual_ID': actual_id,
+                    'Image_X': image_x,
+                    'Image_Y': image_y,
+                    'Appearance_Features': appearance
+                })
+            
+
+    df_points = pd.DataFrame(point_data)
+
+    result = {
+        'Point_IDs': df_points['Point_ID'].tolist(),
+        'Actual_IDs': df_points['Actual_ID'].tolist(),
+        'Image_X': df_points['Image_X'].tolist(),
+        'Image_Y': df_points['Image_Y'].tolist(),
+        'Appearance_Features': df_points['Appearance_Features'].tolist()
+    }
+    
+    return result
+
+
+def old_extract_measurements(file_path):
     'Read measurements file'
     point_data = []
     pattern = re.compile(r'point\s+(\d+)\s+(\d+)\s+([\d.]+)\s+([\d.]+)\s+(.+)')
@@ -256,12 +305,20 @@ def data_association(first_data, second_data):
     id_temp_first_frame = -1 
     id_temp_second_frame = -1
 
-    for i in range(0, num_points_first_data):
-        for j in range(0, num_points_second_data): 
-            app_esim = appearance_first_data[i]
-            app_jesim = appearance_second_data[j]
+    print(f"num points first data: {num_points_first_data}")
+    print(f"num points second data: {num_points_second_data}")
 
-            distance = cosine(app_esim, app_jesim)
+    print(f"len list app first data: {len(appearance_first_data)}")
+    print(f"len list app second data: {len(appearance_second_data)}")
+
+    for i in range(0, num_points_first_data):
+        a = np.array(list(map(float, appearance_first_data[i])))
+        for j in range(0, num_points_second_data): 
+            b = np.array(list(map(float, appearance_second_data[j])))
+
+            cosine_similarity = np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+        
+            distance = 1 - cosine_similarity
 
             if distance < min_distance:
                 min_distance = distance
@@ -271,7 +328,6 @@ def data_association(first_data, second_data):
         assoc.append((id_temp_first_frame, id_temp_second_frame))
         min_distance = float('inf')
         
-
     return assoc 
 
 def read_traj(path='../data/trajectory.dat'):
@@ -309,6 +365,7 @@ def triangulate(R, t, points1, points2, K, assoc):
 
 def compute_pose(points1, points2, K):
     'Compute E -> Pose'
+
     E, mask = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, threshold=1.0, prob=0.999)
     
     points1 = points1[mask.ravel() == 1]    
@@ -369,8 +426,8 @@ def makePoints(data_frame0, data_frame1, assoc):
                 p0.append(point0)
                 p1.append(point1)
 
-    p0 = np.array(p0)
-    p1 = np.array(p1)
+    p0 = np.array(p0, dtype=np.float32)
+    p1 = np.array(p1, dtype=np.float32)
 
     return p0, p1
 
