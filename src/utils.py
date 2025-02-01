@@ -9,7 +9,6 @@ from scipy.spatial import KDTree
 
 def extract_measurements(file_path):
     point_data = []
-    started = False
 
     with open(file_path, 'r') as f: 
         for line in f: 
@@ -26,6 +25,7 @@ def extract_measurements(file_path):
                 # tokens[3]: IMAGE_X coordinate
                 # tokens[4]: IMAGE_Y coordinate
                 # tokens[5:]: APPEARANCE features
+                
                 if(len(tokens) < 5):
                     continue
 
@@ -289,15 +289,14 @@ def data_association(first_data, second_data):
     In pratica non succede e bisogna prendere quello a minimum distance (cosine similarity)
     '''
 
-    actual_id_first_frame = first_data['Actual_IDs']
-    point_id = first_data['Point_IDs']
-    num_points_first_data = len(point_id)
-    appearance_first_data = first_data['Appearance_Features']
+    point_id_first_data = first_data['Point_IDs']
+    actual_id_first_data = first_data['Actual_IDs']
+    app_first_data = first_data['Appearance_Features']
 
-    actual_id_second_frame = second_data['Actual_IDs']
-    point_id_second_frame = second_data['Point_IDs']
-    num_points_second_data = len(point_id_second_frame)
-    appearance_second_data = first_data['Appearance_Features']
+    point_id_second_data = second_data['Point_IDs']
+    actual_id_second_data = second_data['Actual_IDs']
+    app_second_data = second_data['Appearance_Features']
+
     assoc = []
 
     min_distance = float('inf')
@@ -305,16 +304,10 @@ def data_association(first_data, second_data):
     id_temp_first_frame = -1 
     id_temp_second_frame = -1
 
-    print(f"num points first data: {num_points_first_data}")
-    print(f"num points second data: {num_points_second_data}")
-
-    print(f"len list app first data: {len(appearance_first_data)}")
-    print(f"len list app second data: {len(appearance_second_data)}")
-
-    for i in range(0, num_points_first_data):
-        a = np.array(list(map(float, appearance_first_data[i])))
-        for j in range(0, num_points_second_data): 
-            b = np.array(list(map(float, appearance_second_data[j])))
+    for i in range(0, len(point_id_first_data)):
+        a = np.array(list(map(float, app_first_data[i])))
+        for j in range(0, len(point_id_second_data)): 
+            b = np.array(list(map(float, app_second_data[j])))
 
             cosine_similarity = np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
         
@@ -322,8 +315,8 @@ def data_association(first_data, second_data):
 
             if distance < min_distance:
                 min_distance = distance
-                id_temp_first_frame = actual_id_first_frame[i]
-                id_temp_second_frame = actual_id_second_frame[j]
+                id_temp_first_frame = actual_id_first_data[i]
+                id_temp_second_frame = actual_id_second_data[j]
         
         assoc.append((id_temp_first_frame, id_temp_second_frame))
         min_distance = float('inf')
