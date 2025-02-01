@@ -3,7 +3,9 @@ import utils as u
 
 class Camera():
     def __init__(self, K, z_near=0, z_far=5, width=640, height=480):
+        self.prev_T_abs = np.eye(4)
         self.T_abs = np.eye(4)
+        self.T_rel = np.eye(4)
         
         self.K = K
         
@@ -16,15 +18,26 @@ class Camera():
     def absolutePose(self):
         'Return the absolute pose (from frame 0 to frame i+1)'
         return self.T_abs
+    
+    def relativePose(self):
+        'Return the relative pose'
+        return self.T_rel
+    
+    def updateRelative(self):
+        self.T_rel = np.linalg.inv(self.prev_T_abs) @ self.T_abs
+    
+    def updatePrev(self):
+        self.prev_T_abs = self.T_abs
 
-    def updatePose(self, dx):
+    def updatePoseICP(self, dx):
         'Update pose (from 0 to frame i+1 and save T_rel)'
         self.T_abs = u.v2T(dx) @ self.T_abs
-    
+
     def setCameraPose(self, pose):
         'Update the absolute pose with the pose (T_abs=pose)'
         self.T_rel = pose
         self.T_abs = pose
+        self.prev_T_abs = pose
     
     def cameraMatrix(self):
         'Return the camera matrix'

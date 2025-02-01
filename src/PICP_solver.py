@@ -40,6 +40,7 @@ class PICP():
         # (x_cam, y_cam, z_cam)
         camera_point = u.w2C(world_point, self.camera.absolutePose())
 
+        # J_icp 
         Jr = np.zeros((3,6))
         Jr[:3, :3] = np.eye(3)
         Jr[:3, 3:6] = u.skew(-camera_point)
@@ -48,6 +49,7 @@ class PICP():
         iz = 1./phom[2]
         iz2 = iz ** 2 
 
+        # J_proj
         Jp = np.zeros((2,3))
         Jp[0, :] = [iz, 0, -phom[0] * iz2]
         Jp[1, :] = [0, iz, -phom[1] * iz2]
@@ -101,8 +103,6 @@ class PICP():
             return np.linalg.solve(H, -b).reshape(-1, 1)
         except:
             print("Singular matrix")
-            print(f"H:\n {H}")
-            print(f"b:\n {b}")
             print("------------------")
             return np.zeros((1,6))
 
@@ -113,6 +113,7 @@ class PICP():
             return
         # (1 x 6)
         self.dx = self.solve(H, b).T
+        #print(f"dx: {np.linalg.norm(self.dx)}")
     
     def getMap(self):
         return self.world_points
@@ -120,7 +121,7 @@ class PICP():
     def points_2d(self):
         return self.image_points
     
-    def set_map(self, points3d):
+    def setMap(self, points3d):
         self.world_points = points3d
     
     def set_image_points(self, image_points):
