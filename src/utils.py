@@ -375,6 +375,7 @@ def compute_pose(points1, points2, K):
             count = 0
             for d in depths: 
                 if (d > 0):
+                    print(d)
                     count += 1
             return count
 

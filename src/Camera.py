@@ -4,6 +4,8 @@ import utils as u
 class Camera():
     def __init__(self, K, z_near=0, z_far=5, width=640, height=480):
         self.prev_T_abs = np.eye(4)
+        #Is a transformation from the world to the camera (express the world in camera frame)
+        # w_T_c
         self.T_abs = np.eye(4)
         self.T_rel = np.eye(4)
         
@@ -52,6 +54,7 @@ class Camera():
         'image_point = proj(K T_cam^-1 * world_point)'
         'proj(u) = (ux / uz     uy / uz)'
 
+        #world in camera
         w_T_c = self.absolutePose()
         world_point = np.append(world_point, 1)
         

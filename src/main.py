@@ -65,10 +65,18 @@ if __name__ == "__main__":
     print("\n")
 
 
-    iter = 10
+    iter = 20
     for i in range(2, iter): 
         v.run(i)
+        # world in camera frame 
         T_abs = v.cam.absolutePose()
+        #Now i want camera in world frame (w_T_c)^{-1} = (c_T_w)
+        T_abs = np.linalg.inv(T_abs)
+        
+        #Two rotation to align the camera frame = world frame
+        # The z-axis of the camera frame is in the same direction of the x-axis of 
+        # the world frame
+        
         est_traj.append(T_abs)
 
         print("\n")
@@ -83,31 +91,23 @@ if __name__ == "__main__":
         T_gt_rel = u.relativeMotion(u.g2T(gt[i-1]), u.g2T(gt[i]))
         print(f"T_rel_gt:\n {T_gt_rel}")
         print("\n")
-
-    # est_traj.append(T)
-
-    # new_est = []
-    # for i in range(0,len(est_traj)):
-    #     Ti = est_traj[i]
-    #     Ti[2, 3] = 0
-    #     Ti[3, 3] = 0
-    #     new_est.append(Ti)
+        est_traj.append(T_abs)
 
 
-    # est_traj = np.array(new_est)
-    # pos_est = np.array([T[:3, 3] for T in est_traj])
+    est_traj = np.array(est_traj)
+    pos_est = np.array([T[:3, 3] for T in est_traj])
     
-
-    # # plot(pos_gt, pos_est)
-
-    # gt_traj = []
-    # for i in range(0,len(gt)):
-    #     gt_traj.append(u.g2T(gt[i]))
-    
-    # gt_traj = np.array(gt_traj)
-    # pos_gt = np.array([T[:3,3] for T in gt_traj])
 
     # plot(pos_gt, pos_est)
+
+    gt_traj = []
+    for i in range(0,len(gt)):
+        gt_traj.append(u.g2T(gt[i]))
+    
+    gt_traj = np.array(gt_traj)
+    pos_gt = np.array([T[:3,3] for T in gt_traj])
+
+    plot(pos_gt, pos_est)
 
 
 
