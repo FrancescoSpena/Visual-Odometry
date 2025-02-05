@@ -113,7 +113,7 @@ class PICP():
             return
         # (1 x 6)
         self.dx = self.solve(H, b).T
-        print(f"dx: {np.linalg.norm(self.dx)}")
+        # print(f"dx: {np.linalg.norm(self.dx)}")
     
     def getMap(self):
         return self.world_points

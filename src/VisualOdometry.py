@@ -62,16 +62,17 @@ class VisualOdometry():
         #P-ICP
         points_prev, points_curr = u.makePoints(prev_frame, curr_frame, assoc)
 
+        self.cam.updatePrev()
+        map = self.solver.getMap()
+
         for _ in range(20):
-            self.solver.initial_guess(self.cam, self.solver.getMap(), points_prev)
+            self.solver.initial_guess(self.cam, map, points_prev)
             self.solver.one_round(assoc)
             self.cam.updatePoseICP(self.solver.dx)
         
         self.cam.updateRelative()
-        self.cam.updatePrev()
 
-        #Update the map
-        map = self.solver.getMap()
+        #----------------Update the map------------------------
 
         #3D points of the frame prev and curr
         T = self.cam.relativePose()

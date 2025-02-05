@@ -1,13 +1,7 @@
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 import VisualOdometry as vo
 import utils as u
-import rerun as rr
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-
-def evaluate(pos_gt, pos_est):
-    pass
 
 def plot(pos_gt, pos_est):
     fig = plt.figure(figsize=(8, 8))
@@ -39,86 +33,77 @@ def plotGt(pos_gt):
     plt.show()
 
 
-
 if __name__ == "__main__":
     gt = u.read_traj()
     estimated_pose = []
 
     v = vo.VisualOdometry()
     status = v.init()
+    #world in camera frame
     T = v.cam.absolutePose()
-
+    #camera in world frame and align with world camera
+    T = u.alignWithWorldFrame(T)
 
     est_traj = []
     est_traj.append(np.eye(4))
 
     print(f"Status init: {status}")
     
-    print("-------------Estimation------------")
-    print(f"from frame {0} to frame {1}")
-    print(f"T_abs:\n {T}")
-    print(f"from frame {0} to frame {1}")
-    print(f"T_rel:\n {v.cam.relativePose()}")
-    print("-------------Ground Truth----------")
-    T_gt_rel = u.relativeMotion(u.g2T(gt[0]), u.g2T(gt[1]))
-    print(f"T: \n {T_gt_rel}")
-    print("\n")
+    # print("-------------Estimation------------")
+    # print(f"from frame {0} to frame {1}")
+    # print(f"T_abs:\n {T}")
+    # print("-------------Ground Truth----------")
+    # T02 = u.g2T(gt[1])
+    # print(f"T: \n {T02}")
+    # print("\n")
 
 
-    iter = 20
+    iter = 10
     for i in range(2, iter): 
         v.run(i)
         # world in camera frame 
         T_abs = v.cam.absolutePose()
-        #Now i want camera in world frame (w_T_c)^{-1} = (c_T_w)
-        T_abs = np.linalg.inv(T_abs)
-        
-        #Two rotation to align the camera frame = world frame
-        # The z-axis of the camera frame is in the same direction of the x-axis of 
-        # the world frame
+        #camera in world frame and align with the world frame
+        T_abs = u.alignWithWorldFrame(T_abs)
         
         est_traj.append(T_abs)
 
-        print("\n")
-        print("-------------Estimation------------")
-        print(f"from frame 0 to frame {i}")
-        print(f"T_abs:\n {T_abs}")
-        print(f"from frame {i-1} to frame {i}")
-        print(f"T_rel:\n {v.cam.relativePose()}")
-        print("-------------Ground Truth----------")
-        T02 = u.g2T(gt[i])
-        print(f"T: \n {T02}")
-        T_gt_rel = u.relativeMotion(u.g2T(gt[i-1]), u.g2T(gt[i]))
-        print(f"T_rel_gt:\n {T_gt_rel}")
-        print("\n")
-        est_traj.append(T_abs)
+        # print("\n")
+        # print("-------------Estimation------------")
+        # print(f"from frame 0 to frame {i}")
+        # print(f"T_abs:\n {T_abs}")
+        # print("-------------Ground Truth----------")
+        # T02 = u.g2T(gt[i])
+        # print(f"T: \n {T02}")
+        # print("\n")
 
 
-    est_traj = np.array(est_traj)
-    pos_est = np.array([T[:3, 3] for T in est_traj])
+
+    # est_traj = np.array(est_traj)
+    # pos_est = np.array([T[:3, 3] for T in est_traj])
     
-
-    # plot(pos_gt, pos_est)
-
     gt_traj = []
-    for i in range(0,len(gt)):
+    for i in range(0,iter-1):
         gt_traj.append(u.g2T(gt[i]))
     
-    gt_traj = np.array(gt_traj)
-    pos_gt = np.array([T[:3,3] for T in gt_traj])
+    # gt_traj = np.array(gt_traj)
+    # pos_gt = np.array([T[:3,3] for T in gt_traj])
 
-    plot(pos_gt, pos_est)
+    # plot(pos_gt, pos_est)
 
 
 
     #==============Evaluate=====================
+    # #0_T_w
     # T0 = est_traj[0]
+    # #1_T_w
     # T1 = est_traj[1]
 
     # gt0 = gt_traj[0]
     # gt1 = gt_traj[1]
 
-    # rel_T = np.linalg.inv(T0) @ T1
+    # #0_T_1
+    # rel_T = T0 @ T1
     # rel_gt = np.linalg.inv(gt0) @ gt1
 
     # error_T = np.linalg.inv(rel_T) @ rel_gt
@@ -127,3 +112,22 @@ if __name__ == "__main__":
     # norm = rel_T[:3, 3] / np.linalg.norm(rel_gt[:3, 3])
 
     # print(norm)
+
+
+    for i in range(1,iter-1):
+        print(f"from {i-1} to {i}")
+        Ti = est_traj[i-1]
+        Tnext_i = est_traj[i]
+
+        gti = gt_traj[i-1]
+        gtnext_i = gt_traj[i]
+
+        rel_T = Ti @ Tnext_i
+        rel_gt = np.linalg.inv(gti) @ gtnext_i
+
+        error_T = np.linalg.inv(rel_T) @ rel_gt
+
+        rot_part = np.trace(np.eye(3) - error_T[:3, :3])
+        norm = np.linalg.norm(rel_T[:3, 3] / np.linalg.norm(rel_gt[:3, 3]))
+
+        print(norm)

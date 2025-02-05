@@ -3,9 +3,14 @@ import utils as u
 
 class Camera():
     def __init__(self, K, z_near=0, z_far=5, width=640, height=480):
+        '''
+        Small explanation: 
+        T_abs      are the homogeneous transformation that express the world in camera frame i+1. 
+        T_rel      are the homogeneous transformation that express the relative motion between frame i and i+1. 
+        prev_T_abs are the homogeneous transformation that express the world in camera frame i. 
+        '''
+        
         self.prev_T_abs = np.eye(4)
-        #Is a transformation from the world to the camera (express the world in camera frame)
-        # w_T_c
         self.T_abs = np.eye(4)
         self.T_rel = np.eye(4)
         
@@ -26,13 +31,16 @@ class Camera():
         return self.T_rel
     
     def updateRelative(self):
+        'Update the relative T from frame i and i+1'
         self.T_rel = np.linalg.inv(self.prev_T_abs) @ self.T_abs
+        pass
     
     def updatePrev(self):
+        'Save the T from world to camera frame i'
         self.prev_T_abs = self.T_abs
 
     def updatePoseICP(self, dx):
-        'Update pose (from 0 to frame i+1 and save T_rel)'
+        'Update absolute pose'
         self.T_abs = u.v2T(dx) @ self.T_abs
 
     def setCameraPose(self, pose):
@@ -54,8 +62,9 @@ class Camera():
         'image_point = proj(K T_cam^-1 * world_point)'
         'proj(u) = (ux / uz     uy / uz)'
 
-        #world in camera
+        #world in camera frame
         w_T_c = self.absolutePose()
+        #homogeneous coordinate
         world_point = np.append(world_point, 1)
         
         # (4 x 1)

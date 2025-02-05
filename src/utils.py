@@ -231,35 +231,35 @@ def T2m(T):
     t = T[:3, 3].reshape(3,1)
     return R, t
 
-def v2T(v):
-    'From vector to homogeneous transformation'
-    def Rx(roll):
-        c = np.cos(roll)
-        s = np.sin(roll)
-        return np.array([
+def Rx(angle):
+    c = np.cos(angle)
+    s = np.sin(angle)
+    return np.array([
             [1, 0, 0],
             [0, c, -s],
             [0, s, c]
-        ])
+    ])
 
-    def Ry(pitch):
-        c = np.cos(pitch)
-        s = np.sin(pitch)
-        return np.array([
-            [c, 0, s],
-            [0, 1, 0],
-            [-s, 0, c]
-        ])
+def Ry(angle):
+    c = np.cos(angle)
+    s = np.sin(angle)
+    return np.array([
+        [c, 0, s],
+        [0, 1, 0],
+        [-s, 0, c]
+    ])
 
-    def Rz(yaw):
-        c = np.cos(yaw)
-        s = np.sin(yaw)
-        return np.array([
-            [c, -s, 0],
-            [s, c, 0],
-            [0, 0, 1]
-        ])
-    
+def Rz(angle):
+    c = np.cos(angle)
+    s = np.sin(angle)
+    return np.array([
+        [c, -s, 0],
+        [s, c, 0],
+        [0, 0, 1]
+    ])
+
+def v2T(v):
+    'From vector to homogeneous transformation'
     def angles2R(angles):
         roll, pitch, yaw = angles
         R = Rx(roll) @ Ry(pitch) @ Rz(yaw)
@@ -270,6 +270,24 @@ def v2T(v):
     T[:3, :3] = angles2R(v[3:])  
     T[:3, 3] = v[:3] 
     return T
+
+def homogeneous_rotation(R):
+    H = np.eye(4)
+    H[:3, :3] = R
+    return H
+
+def alignWithWorldFrame(T_cam):
+    'From w_T_c to c_T_w and align with the world frame'
+    T_cam = np.linalg.inv(T_cam)
+
+    theta = np.deg2rad(90)
+    R = np.array([[ np.cos(theta), 0, np.sin(theta)],
+                    [ 0,             1, 0            ],
+                    [-np.sin(theta), 0, np.cos(theta)]])
+    H_R = homogeneous_rotation(R)
+
+    T_cam = H_R @ T_cam @ H_R.T
+    return T_cam
 
 def data_association(first_data, second_data):
     '''
@@ -375,7 +393,6 @@ def compute_pose(points1, points2, K):
             count = 0
             for d in depths: 
                 if (d > 0):
-                    print(d)
                     count += 1
             return count
 
