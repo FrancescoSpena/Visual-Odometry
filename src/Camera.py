@@ -32,8 +32,7 @@ class Camera():
     
     def updateRelative(self):
         'Update the relative T from frame i and i+1'
-        self.T_rel = np.linalg.inv(self.prev_T_abs) @ self.T_abs
-        pass
+        self.T_rel = self.prev_T_abs @ np.linalg.inv(self.T_abs)
     
     def updatePrev(self):
         'Save the T from world to camera frame i'
@@ -63,12 +62,12 @@ class Camera():
         'proj(u) = (ux / uz     uy / uz)'
 
         #world in camera frame
-        w_T_c = self.absolutePose()
+        c_T_w = self.absolutePose()
         #homogeneous coordinate
         world_point = np.append(world_point, 1)
         
         # (4 x 1)
-        p_cam = w_T_c @ world_point
+        p_cam = c_T_w @ world_point
 
         z = p_cam[2]
 

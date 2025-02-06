@@ -78,22 +78,10 @@ class PICP():
             if status == False:
                 continue
 
-            chi = np.dot(error.T,error)
-            lam = 1 
-            is_inlier = True
-            if(chi > self.kernel_threshold):
-                lam = np.sqrt(self.kernel_threshold/chi)
-                is_inlier = False 
-                self.chi_outliers += chi 
-            else: 
-                self.chi_inliers += chi 
-                self.num_inliers += 1
-            
-            if(is_inlier or self.keep_outliers):
-                # (6 x 2) * (2 x 6) = (6 x 6)
-                H += J.T @ J * lam
-                # (6 x 2) * (2 x 1) = (6 x 1)
-                b += J.T @ error * lam
+            # (6 x 2) * (2 x 6) = (6 x 6)
+            H += J.T @ J 
+            # (6 x 2) * (2 x 1) = (6 x 1)
+            b += J.T @ error
 
         return H, b
 
@@ -113,7 +101,7 @@ class PICP():
             return
         # (1 x 6)
         self.dx = self.solve(H, b).T
-        # print(f"dx: {np.linalg.norm(self.dx)}")
+        #print(f"dx: {np.linalg.norm(self.dx)}")
     
     def getMap(self):
         return self.world_points

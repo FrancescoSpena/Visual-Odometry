@@ -277,7 +277,7 @@ def homogeneous_rotation(R):
     return H
 
 def alignWithWorldFrame(T_cam):
-    'From w_T_c to c_T_w and align with the world frame'
+    'From c_T_w to w_T_c and align with the world frame'
     T_cam = np.linalg.inv(T_cam)
 
     theta = np.deg2rad(90)

@@ -33,101 +33,68 @@ def plotGt(pos_gt):
     plt.show()
 
 
-if __name__ == "__main__":
+def main():
     gt = u.read_traj()
-    estimated_pose = []
+
+    gt_traj = []
+    est_traj = []
 
     v = vo.VisualOdometry()
-    status = v.init()
-    #world in camera frame
+    #world in frame 0 (estimated)
     T = v.cam.absolutePose()
-    #camera in world frame and align with world camera
+    #frame 0 in world (estimated)
     T = u.alignWithWorldFrame(T)
+    #frame 0 in world (ground truth)
+    gt0 = u.g2T(gt[0])
 
-    est_traj = []
-    est_traj.append(np.eye(4))
-
-    print(f"Status init: {status}")
+    gt_traj.append(gt0)
+    est_traj.append(T)
     
-    # print("-------------Estimation------------")
-    # print(f"from frame {0} to frame {1}")
-    # print(f"T_abs:\n {T}")
-    # print("-------------Ground Truth----------")
-    # T02 = u.g2T(gt[1])
-    # print(f"T: \n {T02}")
-    # print("\n")
+    #inizialize the Visual Odometry system
+    status = v.init()
+    print(f"Status system: {status}")
+    
+    #world in frame 1 (estimated)
+    T = v.cam.absolutePose()
+    #frame 1 in world (estimated)
+    T = u.alignWithWorldFrame(T)
+    #frame 1 in world (ground truth)
+    gt1 = u.g2T(gt[1])
 
+    gt_traj.append(gt1)
+    est_traj.append(T)
 
-    iter = 10
-    for i in range(2, iter): 
+    # print("frame 1 in world:")
+    # print(f"T:\n {est_traj[1]},\n gt:\n {gt_traj[1]}")
+
+    print("Compute...")
+    print("----------------------")
+    iter = 3
+    for i in range(2, iter):
+        #print(f"Update pose with frame {i}")
         v.run(i)
-        # world in camera frame 
-        T_abs = v.cam.absolutePose()
-        #camera in world frame and align with the world frame
-        T_abs = u.alignWithWorldFrame(T_abs)
-        
-        est_traj.append(T_abs)
+        #world in frame i
+        T = v.cam.absolutePose()
+        #frame i in world
+        T = u.alignWithWorldFrame(T)
+        gti = u.g2T(gt[i])
 
-        # print("\n")
-        # print("-------------Estimation------------")
-        # print(f"from frame 0 to frame {i}")
-        # print(f"T_abs:\n {T_abs}")
-        # print("-------------Ground Truth----------")
-        # T02 = u.g2T(gt[i])
-        # print(f"T: \n {T02}")
-        # print("\n")
-
-
-
-    # est_traj = np.array(est_traj)
-    # pos_est = np.array([T[:3, 3] for T in est_traj])
+        gt_traj.append(gti)
+        est_traj.append(T)
     
-    gt_traj = []
-    for i in range(0,iter-1):
-        gt_traj.append(u.g2T(gt[i]))
-    
-    # gt_traj = np.array(gt_traj)
-    # pos_gt = np.array([T[:3,3] for T in gt_traj])
+    # for i in range(0, iter):
+    #     print(f"frame {i} in world:")
+    #     print(f"est:\n {est_traj[i]},\n gt:\n {gt_traj[i]}")
+    #     print("----------------------")
 
-    # plot(pos_gt, pos_est)
+    est_traj = np.array(est_traj)
+    pos_est = np.array([T[:3, 3] for T in est_traj])
 
+    gt_traj = np.array(gt_traj)
+    pos_gt = np.array([T[:3, 3] for T in gt_traj])
 
-
-    #==============Evaluate=====================
-    # #0_T_w
-    # T0 = est_traj[0]
-    # #1_T_w
-    # T1 = est_traj[1]
-
-    # gt0 = gt_traj[0]
-    # gt1 = gt_traj[1]
-
-    # #0_T_1
-    # rel_T = T0 @ T1
-    # rel_gt = np.linalg.inv(gt0) @ gt1
-
-    # error_T = np.linalg.inv(rel_T) @ rel_gt
-
-    # rot_part = np.trace(np.eye(3) - error_T[:3, :3])
-    # norm = rel_T[:3, 3] / np.linalg.norm(rel_gt[:3, 3])
-
-    # print(norm)
+    plot(pos_gt, pos_est)
 
 
-    for i in range(1,iter-1):
-        print(f"from {i-1} to {i}")
-        Ti = est_traj[i-1]
-        Tnext_i = est_traj[i]
-
-        gti = gt_traj[i-1]
-        gtnext_i = gt_traj[i]
-
-        rel_T = Ti @ Tnext_i
-        rel_gt = np.linalg.inv(gti) @ gtnext_i
-
-        error_T = np.linalg.inv(rel_T) @ rel_gt
-
-        rot_part = np.trace(np.eye(3) - error_T[:3, :3])
-        norm = np.linalg.norm(rel_T[:3, 3] / np.linalg.norm(rel_gt[:3, 3]))
-
-        print(norm)
+if __name__ == "__main__":
+    main()
