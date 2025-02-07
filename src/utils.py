@@ -281,12 +281,12 @@ def alignWithWorldFrame(T_cam):
     T_cam = np.linalg.inv(T_cam)
 
     theta = np.deg2rad(90)
-    R = np.array([[ np.cos(theta), 0, np.sin(theta)],
-                    [ 0,             1, 0            ],
-                    [-np.sin(theta), 0, np.cos(theta)]])
-    H_R = homogeneous_rotation(R)
 
+    # Combined rotation (first x, then y)
+    R = Ry(theta) @ Rz(-theta)
+    H_R = homogeneous_rotation(R)
     T_cam = H_R @ T_cam @ H_R.T
+
     return T_cam
 
 def data_association(first_data, second_data):

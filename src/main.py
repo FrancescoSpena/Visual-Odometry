@@ -58,6 +58,7 @@ def main():
     T = v.cam.absolutePose()
     #frame 1 in world (estimated)
     T = u.alignWithWorldFrame(T)
+    T = np.round(T)
     #frame 1 in world (ground truth)
     gt1 = u.g2T(gt[1])
 
@@ -69,7 +70,7 @@ def main():
 
     print("Compute...")
     print("----------------------")
-    iter = 3
+    iter = 50
     for i in range(2, iter):
         #print(f"Update pose with frame {i}")
         v.run(i)
@@ -77,15 +78,16 @@ def main():
         T = v.cam.absolutePose()
         #frame i in world
         T = u.alignWithWorldFrame(T)
+        T = np.round(T)
         gti = u.g2T(gt[i])
 
         gt_traj.append(gti)
         est_traj.append(T)
     
-    # for i in range(0, iter):
-    #     print(f"frame {i} in world:")
-    #     print(f"est:\n {est_traj[i]},\n gt:\n {gt_traj[i]}")
-    #     print("----------------------")
+    for i in range(0, iter):
+        print(f"frame {i} in world:")
+        print(f"est:\n {est_traj[i]},\n gt:\n {gt_traj[i]}")
+        print("----------------------")
 
     est_traj = np.array(est_traj)
     pos_est = np.array([T[:3, 3] for T in est_traj])

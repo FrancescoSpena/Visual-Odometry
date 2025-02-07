@@ -11,7 +11,6 @@ class VisualOdometry():
         self.cam = camera.Camera(K)
         self.solver = solver.PICP(self.cam)
         self.status = True
-        self.prev_frame = None
 
     def init(self):
         path0 = u.generate_path(0)
@@ -39,7 +38,6 @@ class VisualOdometry():
         T_init = u.m2T(R,t)
         self.cam.setCameraPose(T_init)
         self.solver.setMap(map)
-        self.prev_frame = data_frame_1
 
         #Check
         if(not np.isclose(np.linalg.det(R), 1, atol=1e-6) or np.linalg.norm(t) == 0):
@@ -51,9 +49,10 @@ class VisualOdometry():
               
     def run(self, idx):
         'Update relative and absolute pose'
+        path_prev = u.generate_path(idx-1)
         path_curr = u.generate_path(idx)
         
-        prev_frame = self.prev_frame
+        prev_frame = u.extract_measurements(path_prev)
         curr_frame = u.extract_measurements(path_curr)
 
         #Data Association
@@ -68,7 +67,7 @@ class VisualOdometry():
         # At the end of this cicle T_abs is the world express in the
         # reference frame i+1
         for _ in range(20):
-            self.solver.initial_guess(self.cam, map, points_prev)
+            self.solver.initial_guess(self.cam, map, points_curr)
             self.solver.one_round(assoc)
             self.cam.updatePoseICP(self.solver.dx)
         
@@ -76,108 +75,29 @@ class VisualOdometry():
 
         #----------------Update the map------------------------
 
-        # #Relative transformation: the image i+1 express in the reference frame of the image i 
-        # T = self.cam.relativePose()
-        # R, t = u.T2m(T)
+        #Relative transformation: the image i+1 express in the reference frame of the image i 
+        T = self.cam.relativePose()
+        R, t = u.T2m(T)
 
-        # #Obtain a 3D points of the missing points
-        # missing_map = u.triangulate(R, t, points_prev, points_curr,
-        #                             self.cam.cameraMatrix(), assoc)
+        #Obtain a 3D points of the missing points
+        missing_map = u.triangulate(R, t, points_prev, points_curr,
+                                    self.cam.cameraMatrix(), assoc)
         
         
-        # #ID of the points that its already on the map
-        # id_map = [elem[0] for elem in map]
-        # #ID of the map between the prev and curr frame
-        # id_missing_map = [elem[0] for elem in missing_map]
+        #ID of the points that its already on the map
+        id_map = [elem[0] for elem in map]
+        #ID of the map between the prev and curr frame
+        id_missing_map = [elem[0] for elem in missing_map]
 
-        # #ID of the 3D points that are not in the map
-        # missing = [item for item in id_missing_map if item not in set(id_map)]
+        #ID of the 3D points that are not in the map
+        missing = [item for item in id_missing_map if item not in set(id_map)]
 
-        # #Take the 3D points that are not in the map and extend the map
-        # missing_points = []
-        # for id in missing: 
-        #     point = u.getPoint3D(missing_map, id)
-        #     if(point is not None):
-        #         missing_points.append((id, point))
+        #Take the 3D points that are not in the map and extend the map
+        missing_points = []
+        for id in missing: 
+            point = u.getPoint3D(missing_map, id)
+            if(point is not None):
+                missing_points.append((id, point))
 
-        # map.extend(missing_points)
-        # self.solver.setMap(map)
-
-        self.prev_frame = curr_frame
-
-
-
-
-def test_assoc(points1, points2, assoc):
-    if points1.shape != points2.shape or points1.shape[0] != len(assoc):
-        raise ValueError("points1, points2, and assoc must have the same length")
-    
-    plt.figure(figsize=(12, 8))
-
-    for i, (p1, p2) in enumerate(zip(points1, points2)):
-        id1, id2 = assoc[i]  # Extract IDs from assoc
-        
-        # Draw dashed line
-        plt.plot([p1[0], p2[0]], [p1[1], p2[1]], linestyle='dashed', color='black', alpha=0.2)
-        
-        # Display IDs near the points
-        plt.text(p1[0], p1[1], f"{id1}", fontsize=8, color='red', verticalalignment='bottom', horizontalalignment='right')
-        plt.text(p2[0], p2[1], f"{id2}", fontsize=8, color='blue', verticalalignment='bottom', horizontalalignment='left')
-
-    # Plot points
-    plt.scatter(points1[:, 0], points1[:, 1], color='red', label='points1')
-    plt.scatter(points2[:, 0], points2[:, 1], color='blue', label='points2')
-
-    plt.legend()
-    plt.xlabel("X")
-    plt.ylabel("Y")
-    plt.title("Dashed Line Associations with IDs")
-    plt.grid(True)
-    plt.show()
-
-
-def test(cam, world_points, points, assoc):
-    image_points = []
-    ids = []
-
-    curr = []
-    ids_curr = []
-
-    # world_points = (id, point) but the id is refered to the frame i
-    # take the 3D point and project it in the frame i+1 with id = best_id, because in this frame the 2D point
-    # associate with the 3D point in the frame i has id in the frame i+1 equal to best_id
-    for (_, point), (_, best_id) in zip(world_points, assoc):
-        point_in_the_image, is_valid = cam.project_point(point)
-        if(is_valid):
-            image_points.append(point_in_the_image)
-            ids.append(best_id)
-
-    for (id, _), (point) in zip(assoc, points):
-        curr.append(point)
-        ids_curr.append(id)
-
-    image_points = np.array(image_points)
-    curr = np.array(curr)
-
-    plt.figure(figsize=(12, 8))
-    
-    plt.scatter(image_points[:, 0], image_points[:, 1], c='red', label='Projected Points')
-    for idx, (x, y) in zip(ids, image_points):
-        plt.text(x, y, str(idx), color='blue', fontsize=8)
-    
-    plt.scatter(curr[:, 0], curr[:, 1], c='green', label='Current Points')
-    for idx, (x, y) in zip(ids_curr, curr):
-        plt.text(x, y, str(idx), color='orange', fontsize=8)
-    
-    for id_proj, (x_proj, y_proj) in zip(ids, image_points):
-        for id_curr, (x_curr, y_curr) in zip(ids_curr, curr):
-            if id_proj == id_curr:  # Match points with the same ID
-                plt.plot([x_proj, x_curr], [y_proj, y_curr], 'k--', linewidth=0.8)  # Dashed line
-
-    plt.title('Projected and Current Points on Image Plane')
-    plt.xlabel('X (Image)')
-    plt.ylabel('Y (Image)')
-    plt.gca().invert_yaxis()  # Invert Y-axis for image coordinates
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+        map.extend(missing_points)
+        self.solver.setMap(map)

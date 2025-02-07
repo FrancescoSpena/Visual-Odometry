@@ -6,14 +6,6 @@ class PICP():
         self.camera = camera 
         self.world_points = None 
         self.image_points = None
-        self.kernel_threshold = 10000
-        
-        self.keep_outliers = False
-        self.num_inliers = 0
-        self.chi_inliers = 0
-        self.chi_outliers = 0
-        self.min_num_inliers = 0
-        self.damping = 0.1
     
     def initial_guess(self, camera, world_points, point_prev_frame):
         'Set the map and image points in a ref values'
@@ -54,7 +46,7 @@ class PICP():
         Jp[0, :] = [iz, 0, -phom[0] * iz2]
         Jp[1, :] = [0, iz, -phom[1] * iz2]
 
-        # (2, 6) = (2 x 3) * (3 x 3) * (3 x 6)
+        # (2 x 6) = (2 x 3) * (3 x 3) * (3 x 6)
         J = Jp @ K @ Jr
       
         return error, J, True
@@ -90,15 +82,13 @@ class PICP():
         try:
             return np.linalg.solve(H, -b).reshape(-1, 1)
         except:
-            print("Singular matrix")
-            print("------------------")
+            # print("Singular matrix")
+            # print("------------------")
             return np.zeros((1,6))
 
     def one_round(self, assoc):
         'Compute dx'
         H, b = self.linearize(assoc)
-        if(self.num_inliers < self.min_num_inliers):
-            return
         # (1 x 6)
         self.dx = self.solve(H, b).T
         #print(f"dx: {np.linalg.norm(self.dx)}")
