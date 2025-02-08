@@ -100,4 +100,6 @@ class VisualOdometry():
                 missing_points.append((id, point))
 
         map.extend(missing_points)
+
+        print(f"New points, extend map at frame {idx}, size map: {len(map)}")
         self.solver.setMap(map)
