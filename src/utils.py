@@ -56,71 +56,6 @@ def extract_measurements(file_path):
     
     return result
 
-
-def old_extract_measurements(file_path):
-    'Read measurements file'
-    point_data = []
-    pattern = re.compile(r'point\s+(\d+)\s+(\d+)\s+([\d.]+)\s+([\d.]+)\s+(.+)')
-
-    with open(file_path, 'r') as file:
-        lines = file.readlines()
-        for line in lines:
-            match = pattern.match(line)
-            if match:
-                point_id = int(match.group(1))
-                actual_id = int(match.group(2))
-                image_x = float(match.group(3))
-                image_y = float(match.group(4))
-                appearance = [float(val) for val in match.group(5).split()]
-                
-                point_data.append({
-                    'Point_ID': point_id,
-                    'Actual_ID': actual_id,
-                    'Image_X': image_x,
-                    'Image_Y': image_y,
-                    'Appearance_Features': appearance
-                })
-
-    df_points = pd.DataFrame(point_data)
-
-    return {
-        'Point_IDs': df_points['Point_ID'].tolist(),
-        'Actual_IDs': df_points['Actual_ID'].tolist(),
-        'Image_X': df_points['Image_X'].tolist(),
-        'Image_Y': df_points['Image_Y'].tolist(),
-        'Appearance_Features': df_points['Appearance_Features'].tolist()
-    }
-
-def extract_other_info(file_path):
-    'Read other file'
-    sequences = []
-    ground_truths = []
-    odometry_poses = []
-
-    seq_pattern = re.compile(r'seq:\s*(\d+)')
-    gt_pose_pattern = re.compile(r'gt_pose:\s*([\d\-.e]+)\s+([\d\-.e]+)\s+([\d\-.e]+)')
-    odom_pose_pattern = re.compile(r'odom_pose:\s*([\d\-.e]+)\s+([\d\-.e]+)\s+([\d\-.e]+)')
-
-    with open(file_path, 'r') as file:
-        for line in file:
-            seq_match = seq_pattern.search(line)
-            if seq_match:
-                sequences.append(int(seq_match.group(1)))
-
-            gt_match = gt_pose_pattern.search(line)
-            if gt_match:
-                ground_truths.append(tuple(map(float, gt_match.groups())))
-
-            odom_match = odom_pose_pattern.search(line)
-            if odom_match:
-                odometry_poses.append(tuple(map(float, odom_match.groups())))
-
-    return {
-        'Sequences': sequences,
-        'Ground_Truths': ground_truths,
-        'Odometry_Poses': odometry_poses
-    }
-
 def generate_path(id):
     'Generate path_measurements from ID'
     return f"../data/meas-{id:05d}.dat"
@@ -287,7 +222,7 @@ def alignWithWorldFrame(T_cam):
     H_R = homogeneous_rotation(R)
     T_cam = H_R @ T_cam @ H_R.T
 
-    return T_cam
+    return np.round(T_cam)
 
 def data_association(first_data, second_data):
     '''
@@ -481,3 +416,42 @@ def w2C(world_point, camera_pose):
 
     return p_cam[:3]
 
+
+def extract_map(file_path):
+    landmarks = {}
+    
+    with open(file_path, 'r') as f:
+        for line in f:
+            # Remove any leading/trailing whitespace and skip empty lines.
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Split the line into tokens (assuming whitespace-separated values).
+            tokens = line.split()
+            if len(tokens) < 4:
+                # If there are fewer than 4 tokens, skip the line.
+                continue
+            
+            # The first token is the landmark ID.
+            landmark_id = tokens[0]
+            
+            # Parse the position tokens (columns 2 to 4).
+            try:
+                position = np.array([float(tokens[1]), float(tokens[2]), float(tokens[3])],
+                                    dtype=np.float32)
+            except ValueError as e:
+                print(f"Error parsing position for landmark {landmark_id}: {e}")
+                continue
+            
+            # Parse the appearance descriptor tokens (columns 5 onward).
+            try:
+                appearance = [float(token) for token in tokens[4:]]
+            except ValueError as e:
+                print(f"Error parsing appearance for landmark {landmark_id}: {e}")
+                appearance = tokens[4:]
+            
+            # Store the parsed data in the dictionary.
+            landmarks[landmark_id] = {"position": position, "appearance": appearance}
+    
+    return landmarks

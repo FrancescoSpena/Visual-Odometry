@@ -1,5 +1,7 @@
 import numpy as np 
 import utils as u
+from scipy.sparse.linalg import splu
+from scipy.sparse import csc_matrix
 
 class PICP():
     def __init__(self, camera):
@@ -63,11 +65,13 @@ class PICP():
             image_point = self.image_points[i]
 
             if world_point is None or image_point is None:
+               # print("not valid assoc")
                 continue
 
             error, J, status = self.error_and_jacobian(world_point, image_point)
 
             if status == False:
+                #print("status lin False")
                 continue
 
             # (6 x 2) * (2 x 6) = (6 x 6)
@@ -80,10 +84,10 @@ class PICP():
     def solve(self, H, b): 
         'Solve a LS problem H*delta_x = -b'
         try:
-            return np.linalg.solve(H, -b).reshape(-1, 1)
+            chol = splu(H)
+            return chol.solve(-b)
         except:
-            # print("Singular matrix")
-            # print("------------------")
+            print("Singular matrix")
             return np.zeros((1,6))
 
     def one_round(self, assoc):

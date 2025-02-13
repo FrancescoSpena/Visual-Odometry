@@ -99,7 +99,11 @@ class VisualOdometry():
             if(point is not None):
                 missing_points.append((id, point))
 
+        print(f"Num of missing points: {len(missing_points)}")
+        
         map.extend(missing_points)
 
-        print(f"New points, extend map at frame {idx}, size map: {len(map)}")
+        print(f"Num of points in the map: {len(map)}")
+        print("--------------")
+
         self.solver.setMap(map)
