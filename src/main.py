@@ -63,7 +63,7 @@ def main():
 
     print("Compute...")
     print("----------------------")
-    iter = 80
+    iter = 121
     for i in range(2, iter):
         print(f"Update pose with frame {i}")
         v.run(i)
@@ -81,22 +81,41 @@ def main():
     #     print(f"est:\n {est_traj[i]},\n gt:\n {gt_traj[i]}")
     #     print("----------------------")
 
-    est_traj = np.array(est_traj)
-    pos_est = np.array([T[:3, 3] for T in est_traj])
+    # est_traj = np.array(est_traj)
+    # pos_est = np.array([T[:3, 3] for T in est_traj])
 
-    gt_traj = np.array(gt_traj)
-    pos_gt = np.array([T[:3, 3] for T in gt_traj])
+    # gt_traj = np.array(gt_traj)
+    # pos_gt = np.array([T[:3, 3] for T in gt_traj])
 
-    #map = v.solver.getMap()
+    # #map = v.solver.getMap()
 
-    # map = u.extract_map('../data/world.dat')
-    # pos_map = []
+    # # map = u.extract_map('../data/world.dat')
+    # # pos_map = []
 
-    # for lm_id, data in map.items():
-    #     pos_map.append((lm_id, np.array(data['position'])))
+    # # for lm_id, data in map.items():
+    # #     pos_map.append((lm_id, np.array(data['position'])))
 
 
-    plot(pos_gt, pos_est)
+    # plot(pos_gt, pos_est)
+
+    # for i in range(0, len(est_traj)-1):
+    #     Ti = est_traj[i]
+    #     Ti_next = est_traj[i+1]
+
+    #     Ti_gt = gt_traj[i]
+    #     Ti_next_gt = gt_traj[i+1]
+
+    #     T_rel = u.relativeMotion(Ti, Ti_next)
+    #     T_rel_gt = u.relativeMotion(Ti_gt, Ti_next_gt)
+
+    #     error_T = np.linalg.inv(T_rel) @ T_rel_gt
+        
+    #     rot_part = np.trace(np.eye(3) - error_T[:3, :3])
+    #     tran_part = np.linalg.norm(T_rel[:3, 3]) / np.linalg.norm(T_rel_gt[:3, 3])
+        
+
+    #     print(f"rot part: {rot_part}")
+    #     print(f"tran part: {tran_part}")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ class PICP():
         self.camera = camera 
         self.world_points = None 
         self.image_points = None
+        self.damping = 0.5
     
     def initial_guess(self, camera, world_points, point_prev_frame):
         'Set the map and image points in a ref values'
@@ -83,16 +84,15 @@ class PICP():
 
     def solve(self, H, b): 
         'Solve a LS problem H*delta_x = -b'
-        try:
-            chol = splu(H)
-            return chol.solve(-b)
-        except:
-            print("Singular matrix")
-            return np.zeros((1,6))
+        chol = splu(H)
+        return chol.solve(-b)
 
     def one_round(self, assoc):
         'Compute dx'
         H, b = self.linearize(assoc)
+        #Never singular matrix
+        H += np.eye(6)*self.damping
+        
         # (1 x 6)
         self.dx = self.solve(H, b).T
         #print(f"dx: {np.linalg.norm(self.dx)}")
