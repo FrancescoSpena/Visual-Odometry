@@ -8,7 +8,7 @@ class PICP():
         self.camera = camera 
         self.world_points = None 
         self.image_points = None
-        self.damping = 0.5
+        self.damping = 0.01
     
     def initial_guess(self, camera, world_points, point_prev_frame):
         'Set the map and image points in a ref values'
@@ -24,6 +24,7 @@ class PICP():
         predicted_image_point, is_valid = self.camera.project_point(world_point)
         
         if (is_valid == False):
+            #print("[Error_Jacobian]No valid projection")
             return None, None, False 
         
         # (2 x 1)
@@ -66,13 +67,15 @@ class PICP():
             image_point = self.image_points[i]
 
             if world_point is None or image_point is None:
-               # print("not valid assoc")
+                # print("[Linearize]World Point OR Image Point are NONE")
+                # print("-------------")
                 continue
 
             error, J, status = self.error_and_jacobian(world_point, image_point)
 
             if status == False:
-                #print("status lin False")
+                # print("[Linearize][Status=False][Error_Jacobian]Projection of point not valid")
+                # print("-------------")
                 continue
 
             # (6 x 2) * (2 x 6) = (6 x 6)
@@ -84,8 +87,11 @@ class PICP():
 
     def solve(self, H, b): 
         'Solve a LS problem H*delta_x = -b'
-        chol = splu(H)
-        return chol.solve(-b)
+        try:
+            return np.linalg.solve(H, -b).reshape(-1, 1)
+        except:
+            print("[Solve]Singular Matrix")
+            return np.zeros((1,6))
 
     def one_round(self, assoc):
         'Compute dx'
@@ -95,6 +101,7 @@ class PICP():
         
         # (1 x 6)
         self.dx = self.solve(H, b).T
+
         #print(f"dx: {np.linalg.norm(self.dx)}")
     
     def getMap(self):
