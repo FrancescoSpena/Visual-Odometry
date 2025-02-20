@@ -3,6 +3,7 @@ import numpy as np
 import PICP_solver as solver
 import Camera as camera
 import matplotlib.pyplot as plt
+from collections import Counter
 
 class VisualOdometry():
     def __init__(self, camera_path='../data/camera.dat'):
@@ -48,7 +49,7 @@ class VisualOdometry():
         return self.status
               
     def run(self, idx):
-        'Update relative and absolute pose'
+        'Update Relative and Absolute Pose'
         path_prev = u.generate_path(idx-1)
         path_curr = u.generate_path(idx)
         
@@ -63,6 +64,23 @@ class VisualOdometry():
 
         self.cam.updatePrev()
         map = self.solver.getMap()
+
+        #--------------------Debug------------------------
+
+        def find_dup(ids):
+            counts = Counter(ids)
+            return [id for id, count in counts.items() if count > 1]
+    
+        id_map = [item[0] for item in map]
+        dup = find_dup(id_map)
+        
+        if(len(dup) != 0):
+            print(f"[VisualOdometry]Number of duplicates: {len(dup)}")
+        print(f"[VisualOdometry]Len of the map: {len(map)}")
+        print(f"[VisualOdometry]Number of point curr: {points_curr.shape[0]}")
+        print(f"[VisualOdometry]Number of associations: {len(assoc)}")
+
+        #---------------------PICP---------------------------
 
         # At the end of this cicle T_abs is the world express in the
         # reference frame i+1
