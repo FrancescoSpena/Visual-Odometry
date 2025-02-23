@@ -60,7 +60,32 @@ def generate_path(id):
     'Generate path_measurements from ID'
     return f"../data/meas-{id:05d}.dat"
 
-def extract_camera_data(file_path):
+def extract_world_data(file_path='../data/world.dat'):
+    world_info = {}
+
+    with open(file_path, "r") as file:
+        for line in file:
+            line = line.strip()
+
+            if not line:
+                continue
+
+            parts = line.split()
+            if(len(parts) < 4):
+                continue
+
+            landmark_id = parts[0]
+            position = [float(x) for x in parts[1:4]]
+            appearance = parts[4:]
+
+            world_info[landmark_id] = {
+                "position": position,
+                "appearance": appearance
+            }
+    
+    return world_info
+
+def extract_camera_data(file_path='../data/camera.dat'):
     'Read camera file'
     camera_matrix = []
     cam_transform = []
@@ -226,7 +251,7 @@ def alignWithWorldFrame(T_cam):
 
 def data_association(first_data, second_data):
     '''
-    return {
+    first_data or second_data: return {
         'Point_IDs': df_points['Point_ID'].tolist(),
         'Actual_IDs': df_points['Actual_ID'].tolist(),
         'Image_X': df_points['Image_X'].tolist(),
@@ -234,12 +259,12 @@ def data_association(first_data, second_data):
         'Appearance_Features': df_points['Appearance_Features'].tolist()
     }
 
-    Point_IDs è un indice progressivo che indica quante misure hai in una singola immagine
+    Point_IDs is a progressive index indicating how many measurements you have in a single image.
     
-    Actual_IDs è un indice UNIVOCO considerando tutti i punti nel mondo
+    Actual_IDs is a UNIQUE index considering all points in the world.
     
-    Appearance descrive il punto nell'immagine. Idealmente hai la stessa appearance ogni volta che misuri lo STESSO punto.
-    In pratica non succede e bisogna prendere quello a minimum distance (cosine similarity)
+    Appearance describes the point in the image. Ideally, you have the same appearance every time you measure the SAME point.
+    In practice, this does not happen, so we choose the one with minimum cosine distance.
     '''
 
     point_id_first_data = first_data['Point_IDs']
@@ -252,45 +277,43 @@ def data_association(first_data, second_data):
 
     assoc = []
 
-    min_distance = float('inf')
+    for i in range(len(point_id_first_data)):
+        # Reinitialize temporary variables for each point in the first dataset
+        min_distance = float('inf')
+        id_temp_first_frame = -1
+        id_temp_second_frame = -1
 
-    id_temp_first_frame = -1 
-    id_temp_second_frame = -1
-
-    for i in range(0, len(point_id_first_data)):
         a = np.array(list(map(float, app_first_data[i])))
-        for j in range(0, len(point_id_second_data)): 
+        for j in range(len(point_id_second_data)):
             b = np.array(list(map(float, app_second_data[j])))
-
             cosine_similarity = np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
-        
             distance = 1 - cosine_similarity
 
             if distance < min_distance:
                 min_distance = distance
                 id_temp_first_frame = actual_id_first_data[i]
                 id_temp_second_frame = actual_id_second_data[j]
-        
+
         assoc.append((id_temp_first_frame, id_temp_second_frame))
-        min_distance = float('inf')
-        
-    return assoc 
+
+    return assoc
 
 def read_traj(path='../data/trajectory.dat'):
     'Read the trajectory file'
     gt = []
     with open(path, 'r') as file: 
         for line in file: 
-            if line.strip() and not line.startswith('#'):
-                elements = line.split()
-                gt_pose = list(map(float, elements[4:7]))  # [x, y, z]
+            parts = line.strip().split()
+            if len(parts) >= 7:
+                gt_pose = list(map(float, parts[4:7]))
                 gt.append(gt_pose)
     return gt
 
 def triangulate(R, t, points1, points2, K, assoc):
     'Return a list of 3d points (ID, (X, Y, Z))'
     'assoc = (ID, best_ID)'
-    
+    assert len(points1) == len(points2) == len(assoc)
+
     P1 = K @ np.hstack((np.eye(3), np.zeros((3, 1))))
     P2 = K @ np.hstack((R, t))
 
