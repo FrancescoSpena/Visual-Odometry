@@ -92,7 +92,7 @@ def main():
 
     print("Compute...")
     print("----------------------")
-    iter = 80
+    iter = 50
     for i in range(2, iter):
         print(f"[Main]Update pose with frame {i}")
         v.run(i)

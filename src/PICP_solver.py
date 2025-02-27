@@ -8,7 +8,7 @@ class PICP():
         self.camera = camera 
         self.world_points = None 
         self.image_points = None
-        self.damping = 0.01
+        self.damping = 0.0001
     
     def initial_guess(self, camera, world_points, point_prev_frame):
         'Set the map and image points in a ref values'

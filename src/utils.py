@@ -242,7 +242,7 @@ def alignWithWorldFrame(T_cam):
     H_R = homogeneous_rotation(R)
     T_cam = H_R @ T_cam @ H_R.T
 
-    return np.round(T_cam, decimals=6)
+    return np.round(T_cam)
 
 def alignWithCameraFrame(T_world):
     'From w_T_c to c_T_w'

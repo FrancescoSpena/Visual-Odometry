@@ -19,10 +19,12 @@ class VisualOdometry():
 
         data_frame_0 = u.extract_measurements(path0)
         data_frame_1 = u.extract_measurements(path1)
-        assoc = u.data_association(data_frame_0, data_frame_1)
+        # assoc = u.data_association(data_frame_0, data_frame_1)
 
-        p_0, p_1 = u.makePoints(data_frame_0, data_frame_1, assoc)
-        
+        # p_0, p_1 = u.makePoints(data_frame_0, data_frame_1, assoc)
+
+        p_0, p_1, assoc = u.true_points(data_frame_0, data_frame_1)
+
         #Pose from 0 to 1
         R, t = u.compute_pose(p_0,
                               p_1,
@@ -56,26 +58,19 @@ class VisualOdometry():
         prev_frame = u.extract_measurements(path_prev)
         curr_frame = u.extract_measurements(path_curr)
 
-        #Data Association
-        assoc = u.data_association(prev_frame,curr_frame)
+        # #Data Association
+        # assoc = u.data_association(prev_frame,curr_frame)
 
-        #P-ICP
-        points_prev, points_curr = u.makePoints(prev_frame, curr_frame, assoc)
+        # #P-ICP
+        # points_prev, points_curr = u.makePoints(prev_frame, curr_frame, assoc)
+
+        points_prev, points_curr, assoc = u.true_points(prev_frame, curr_frame)
 
         self.cam.updatePrev()
         map = self.solver.getMap()
 
         #--------------------Debug------------------------
 
-        def find_dup(ids):
-            counts = Counter(ids)
-            return [id for id, count in counts.items() if count > 1]
-    
-        id_map = [item[0] for item in map]
-        dup = find_dup(id_map)
-        
-        if(len(dup) != 0):
-            print(f"[VisualOdometry]Number of duplicates: {len(dup)}")
         print(f"[VisualOdometry]Len of the map: {len(map)}")
         print(f"[VisualOdometry]Number of point curr: {points_curr.shape[0]}")
         print(f"[VisualOdometry]Number of associations: {len(assoc)}")
