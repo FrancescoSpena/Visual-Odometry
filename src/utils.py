@@ -267,7 +267,8 @@ def read_traj(path='../data/trajectory.dat'):
                 gt.append(gt_pose)
     return gt
 
-def true_points(first_data, second_data):
+def data_association(first_data, second_data):
+    'Return p0, p1, points_first=(ID, (x, y)), points_second=(ID, (x,y)), assoc=(ID, best)'
     point_id_first_data = first_data['Point_IDs']
     actual_id_first_data = first_data['Actual_IDs']
     coord_x_first = first_data['Image_X']
@@ -292,14 +293,17 @@ def true_points(first_data, second_data):
                 yfirst = coord_y_first[i]
                 xsecond = coord_x_second[j]
                 ysecond = coord_y_second[j]
-                points_first.append((xfirst, yfirst))
-                points_second.append((xsecond, ysecond))
+                points_first.append((act_first, (xfirst, yfirst)))
+                points_second.append((act_second, (xsecond, ysecond)))
                 assoc.append((act_first, act_second))
                 
-    p0 = np.array(points_first, dtype=np.float32)
-    p1 = np.array(points_second, dtype=np.float32)
+    p0 = [item[1] for item in points_first]
+    p1 = [item[1] for item in points_second]
 
-    return p0, p1, assoc
+    p0 = np.array(p0, dtype=np.float32)
+    p1 = np.array(p1, dtype=np.float32)
+
+    return p0, p1, points_first, points_second, assoc
 
 def old_data_association(first_data, second_data):
     '''
@@ -400,6 +404,8 @@ def compute_pose(points1, points2, K):
 
     E, mask = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, threshold=1.0, prob=0.999)
     
+    #print(f"Essential Matrix:\n {E}")
+    
     points1 = points1[mask.ravel() == 1]    
     points2 = points2[mask.ravel() == 1]
 
@@ -434,48 +440,15 @@ def compute_pose(points1, points2, K):
     
     for R_cand, t_cand in poss_sol:
         count_in_front = bestSolution(R_cand, t_cand, K, points1, points2)
+        #print(f"[Estimate pose]Count in front: {count_in_front}")
         if count_in_front >= max_points_in_front:
             max_points_in_front = count_in_front
             best_R, best_t = R_cand, t_cand
 
     return best_R, best_t
 
-def makePoints(data_frame0, data_frame1, assoc):
-    '''
-    Return two numpy array p0 = (x0, y0), p1 = (x1, y1) with the i-esim element of p0 is the coord. of
-    the point with app_id = id and i-esim element of p1 is the coord. of the point with app_id = best_id
-    '''
-    p0 = []
-    p1 = []
 
-    for elem in assoc:
-            id, best = elem
-            point0 = get_point(data_frame0, id)
-            point1 = get_point(data_frame1, best)
-            
-            if(point0 is not None and point1 is not None): 
-                p0.append(point0)
-                p1.append(point1)
 
-    p0 = np.array(p0, dtype=np.float32)
-    p1 = np.array(p1, dtype=np.float32)
-
-    return p0, p1
-
-def get_point(data, target_id):
-    actual_id = data['Actual_IDs']
-    point_id = data['Point_IDs']
-    num_points = len(point_id)
-    x = data['Image_X']
-    y = data['Image_Y']
-
-    for i in range(0, num_points):
-        actual = actual_id[i]
-        if(actual == target_id):
-            #print(f"actual: {actual}, target_id: {target_id}, FOUND!!")
-            return x[i], y[i]
-
-    return None
 
 def getPoint3D(points, id):
 
@@ -498,6 +471,7 @@ def w2C(world_point, camera_pose):
 
     world_point = np.append(world_point, 1)
 
+    #p_cam = c_T_w @ w_p
     p_cam = camera_pose @ world_point
 
     return p_cam[:3]

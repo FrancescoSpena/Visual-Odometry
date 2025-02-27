@@ -19,11 +19,8 @@ class VisualOdometry():
 
         data_frame_0 = u.extract_measurements(path0)
         data_frame_1 = u.extract_measurements(path1)
-        # assoc = u.data_association(data_frame_0, data_frame_1)
 
-        # p_0, p_1 = u.makePoints(data_frame_0, data_frame_1, assoc)
-
-        p_0, p_1, assoc = u.true_points(data_frame_0, data_frame_1)
+        p_0, p_1, _, _, assoc = u.data_association(data_frame_0, data_frame_1)
 
         #Pose from 0 to 1
         R, t = u.compute_pose(p_0,
@@ -38,8 +35,6 @@ class VisualOdometry():
                             self.cam.K,
                             assoc)
         
-        T_init = u.m2T(R,t)
-        self.cam.setCameraPose(T_init)
         self.solver.setMap(map)
 
         #Check
@@ -58,29 +53,23 @@ class VisualOdometry():
         prev_frame = u.extract_measurements(path_prev)
         curr_frame = u.extract_measurements(path_curr)
 
-        # #Data Association
-        # assoc = u.data_association(prev_frame,curr_frame)
-
-        # #P-ICP
-        # points_prev, points_curr = u.makePoints(prev_frame, curr_frame, assoc)
-
-        points_prev, points_curr, assoc = u.true_points(prev_frame, curr_frame)
+        p_prev, p_curr, _, _, assoc = u.data_association(prev_frame, curr_frame)
 
         self.cam.updatePrev()
         map = self.solver.getMap()
 
         #--------------------Debug------------------------
 
-        print(f"[VisualOdometry]Len of the map: {len(map)}")
-        print(f"[VisualOdometry]Number of point curr: {points_curr.shape[0]}")
-        print(f"[VisualOdometry]Number of associations: {len(assoc)}")
+        # print(f"[VisualOdometry]Len of the map: {len(map)}")
+        # print(f"[VisualOdometry]Number of point curr: {points_curr.shape[0]}")
+        # print(f"[VisualOdometry]Number of associations: {len(assoc)}")
 
         #---------------------PICP---------------------------
 
         # At the end of this cicle T_abs is the world express in the
         # reference frame i+1
-        for _ in range(20):
-            self.solver.initial_guess(self.cam, map, points_curr)
+        for _ in range(3):
+            self.solver.initial_guess(self.cam, map, p_curr)
             self.solver.one_round(assoc)
             self.cam.updatePoseICP(self.solver.dx)
         
@@ -93,7 +82,7 @@ class VisualOdometry():
         R, t = u.T2m(T)
 
         #Obtain a 3D points of the missing points
-        missing_map = u.triangulate(R, t, points_prev, points_curr,
+        missing_map = u.triangulate(R, t, p_prev, p_curr,
                                     self.cam.cameraMatrix(), assoc)
         
         

@@ -10,10 +10,10 @@ class PICP():
         self.image_points = None
         self.damping = 0.0001
     
-    def initial_guess(self, camera, world_points, point_prev_frame):
+    def initial_guess(self, camera, world_points, point_curr_frame):
         'Set the map and image points in a ref values'
         self.world_points = world_points
-        self.image_points = point_prev_frame
+        self.image_points = point_curr_frame
         self.camera = camera
     
     def error_and_jacobian(self, world_point, reference_image_point):
@@ -32,6 +32,8 @@ class PICP():
             [predicted_image_point[0] - reference_image_point[0]],
             [predicted_image_point[1] - reference_image_point[1]]
         ])
+
+        #print(f"[Error Jacobian]Error:\n {error}")
 
         # (x_cam, y_cam, z_cam)
         camera_point = u.w2C(world_point, self.camera.absolutePose())
@@ -61,9 +63,8 @@ class PICP():
         b = np.zeros((6,1))
 
         for i, (id, best_id) in enumerate(assoc):
-            curr_idx = best_id
-            
-            world_point = u.getPoint3D(self.world_points,curr_idx)
+            #print(f"[Linearize]id={id},best={best_id}")
+            world_point = u.getPoint3D(self.world_points, best_id)
             image_point = self.image_points[i]
 
             if world_point is None or image_point is None:
@@ -102,7 +103,7 @@ class PICP():
         # (1 x 6)
         self.dx = self.solve(H, b).T
 
-        #print(f"dx: {np.linalg.norm(self.dx)}")
+        print(f"[Solver]dx: {np.linalg.norm(self.dx)}")
     
     def getMap(self):
         return self.world_points
