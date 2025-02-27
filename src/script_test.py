@@ -129,15 +129,21 @@ def main():
     p0, p1, points_frame0, points_frame1, assoc = u.data_association(data_frame0, data_frame1)
     
     #----------Complete VO-----------
-    # #Good rotation and translation is consistent to the movement (forward)
-    # v = vo.VisualOdometry()
-    # status = v.init()
-    # T = v.cam.absolutePose()
-    # R, t = u.T2m(T)
+    #Good rotation and translation is consistent to the movement (forward)
+    
+    v = vo.VisualOdometry()
+    status = v.init()
+    print(f"Status: {status}")
+    T = v.cam.absolutePose()
+    R, t = u.T2m(T)
+
+    #print(f"R:\n {R}, \nt:\n {t}")
+    
     #----------Complete VO-----------
 
     #----------Internal VO-----------
     #With this the test=versus is scaled (value large but its normal)
+    
     # R, t = u.compute_pose(p0, p1, K)
 
     # R = np.round(R)
@@ -148,20 +154,20 @@ def main():
     #----------Internal VO-----------
 
     #----------GT-----------
-    T0_gt = u.g2T(gt[0])  # frame 0 in world frame (w_T_0)
-    T1_gt = u.g2T(gt[1])  # frame 1 in world frame (w_T_1)
+    # T0_gt = u.g2T(gt[0])  # frame 0 in world frame (w_T_0)
+    # T1_gt = u.g2T(gt[1])  # frame 1 in world frame (w_T_1)
 
-    # Compute relative pose: 0_T_1 = 0_T_w @ w_T_1
-    T_rel = np.linalg.inv(T0_gt) @ T1_gt
+    # # Compute relative pose: 0_T_1 = 0_T_w @ w_T_1
+    # T_rel = np.linalg.inv(T0_gt) @ T1_gt
 
-    # print(T_rel)
-    #T_align: transformation align with camera frame
-    #c_T_w
-    T_align = u.alignWithCameraFrame(T_rel)
+    # # print(T_rel)
+    # #T_align: transformation align with camera frame
+    # #c_T_w
+    # T_align = u.alignWithCameraFrame(T_rel)
 
-    R, t = u.T2m(T_align)
+    # R, t = u.T2m(T_align)
 
-    print(f"R:\n {R}, \nt:\n {t}")
+    # print(f"R:\n {R}, \nt:\n {t}")
 
     #----------GT-----------
 
@@ -192,6 +198,7 @@ def main():
 
     print("Frame 2:")
     test_proj(map, points_frame2, camera)
+
 
 
 

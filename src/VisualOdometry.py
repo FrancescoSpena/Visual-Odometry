@@ -36,6 +36,8 @@ class VisualOdometry():
                             assoc)
         
         self.solver.setMap(map)
+        T = u.m2T(R,t)
+        self.cam.setCameraPose(T)
 
         #Check
         if(not np.isclose(np.linalg.det(R), 1, atol=1e-6) or np.linalg.norm(t) == 0):
