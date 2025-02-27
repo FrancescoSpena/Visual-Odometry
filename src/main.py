@@ -1,120 +1,250 @@
+import utils as u 
 import numpy as np
 import VisualOdometry as vo
-import utils as u
-import matplotlib.pyplot as plt
-import time
+import Camera as cam
+import PICP_solver as s
 
-def plot(gt_traj, est_traj, map_points=None):
-    est_traj = np.array(est_traj)
-    pos_est = np.array([T[:3, 3] for T in est_traj])
+#Camera
+camera_info = u.extract_camera_data()
+K = camera_info['camera_matrix']
+T_cam = camera_info['cam_transform']
 
-    gt_traj = np.array(gt_traj)
-    pos_gt = np.array([T[:3, 3] for T in gt_traj])
+#World
+world_info = u.extract_world_data()
 
-    fig = plt.figure(figsize=(8, 8))
-    ax = fig.add_subplot(111, projection='3d')
+#Trajectory
+gt = u.read_traj()
 
-    ax.plot(pos_gt[:, 0], pos_gt[:, 1], pos_gt[:, 2],
-            'bo-', markersize=5, label="Ground Truth")
-    ax.plot(pos_est[:, 0], pos_est[:, 1], pos_est[:, 2],
-            'ro-', markersize=5, label="Estimated")
+def getPoint(point_frame0, target_id):
+    'Return 2D given the id'
+    for elem in point_frame0:
+        id, point = elem 
 
-    if map_points is not None:
-        map_xyz = np.array([point[1] for point in map_points])
-
-        ax.scatter(map_xyz[:, 0], map_xyz[:, 1], map_xyz[:, 2],
-                marker='^', color='g', s=50, label="Map Points")
-
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
-    ax.set_zlabel("Z")
-    ax.set_title("Ground Truth vs Estimated Trajectories with Map Points")
-    ax.legend()
-    plt.grid(True)
-    plt.show()
-
-def evaluate(est_traj, gt_traj):
-    for i in range(0, len(est_traj)-1):
-        Ti = est_traj[i]
-        Ti_next = est_traj[i+1]
-
-        Ti_gt = gt_traj[i]
-        Ti_next_gt = gt_traj[i+1]
-
-        T_rel = u.relativeMotion(Ti, Ti_next)
-        T_rel_gt = u.relativeMotion(Ti_gt, Ti_next_gt)
-
-        error_T = np.linalg.inv(T_rel) @ T_rel_gt
-        
-        rot_part = np.trace(np.eye(3) - error_T[:3, :3])
-        tran_part = np.linalg.norm(T_rel[:3, 3]) / np.linalg.norm(T_rel_gt[:3, 3])
-        
-
-        print(f"frame {i}")
-        #print(f"rot part: {rot_part}")
-        print(f"tran part: {np.round(tran_part)}")
-        print("-------------")
+        if(id == target_id):
+            point = [float(x) for x in point]
+            point = np.array(point)
+            return point
     
+    return None
+
+def testTransf():
+    # Generate a random transformation matrix (rotation + translation)
+    def random_transform():
+        theta = np.random.uniform(0, 2*np.pi)
+        R = u.Rz(theta) @ u.Ry(theta)
+        t = np.random.randn(3)
+        T = np.eye(4)
+        T[:3, :3] = R
+        T[:3, 3] = t
+        return T
+
+    # Test the inverse relationship
+    T_original = random_transform()
+
+    # Test alignWithCameraFrame(alignWithWorldFrame(T))
+    T_transformed = u.alignWithWorldFrame(T_original)
+    T_recovered = u.alignWithCameraFrame(T_transformed)
+
+    print("Original:\n", T_original)
+    print("\nRecovered:\n", T_recovered)
+    print("\nDifference:\n", T_original - T_recovered)
+    print("\nIs close:", np.allclose(T_original, T_recovered, atol=1e-6))
+
+    # Test alignWithWorldFrame(alignWithCameraFrame(T))
+    T_transformed_back = u.alignWithCameraFrame(T_original)
+    T_recovered_back = u.alignWithWorldFrame(T_transformed_back)
+
+    print("\n--- Reverse Test ---")
+    print("Original:\n", T_original)
+    print("\nRecovered (reverse):\n", T_recovered_back)
+    print("\nDifference (reverse):\n", T_original - T_recovered_back)
+    print("\nIs close (reverse):", np.allclose(T_original, T_recovered_back, atol=1e-6))
+
+def transform_point(p_cam, T):
+    p_homog = np.append(p_cam, 1.0)
+        #w_p = w_T_c @ c_p
+    p_world_homog = T @ p_homog
+    return p_world_homog[:3]
+    
+def versus(map, world):
+    #w_T_c
+    #T = u.alignWithWorldFrame(T_align)
+
+    out = 0
+    for elem in map:
+        id, pos_cam = elem
+
+        pos_cam = transform_point(pos_cam, T_cam)
+        pos_world_gt = world[str(id)]['position']
+
+        if(pos_cam[2] <= 0):
+            out += 1
+
+            
+        print(f"ID={id} --> pos_est: {pos_cam}")
+        print(f"ID={id} --> pos_gt: {pos_world_gt}")
+        print("----")
+        
+    return out
+    
+def test_proj(map, point_frame0, camera):
+    all_equal = 0
+    all_good = 0
+    i = 0
+    for elem in map:
+        id, point = elem
+        project_point, isvalid = camera.project_point(point)
+        
+        if isvalid:
+            point_true = getPoint(point_frame0, id)
+            if(point_true is not None):
+                all_good +=1
+                #print(f"true point: {point_true}, proj: {project_point}")
+        else:
+            all_equal+=1
+        i +=1
+
+    print(f"Point valid: {all_good}")
+    print(f"Point not valid: {all_equal}")
+    print(f"Number of points in the map: {len(map)}")
+    print("--Finish Data for this frame--")  
+
+    
+def test_picp(camera, solver, map, points, assoc):
+    camera.updatePrev()
+    for _ in range(5):
+        solver.initial_guess(camera, map, points)
+        solver.one_round(assoc)
+        camera.updatePoseICP(solver.dx)
+    
+    print(f"T_abs:\n {np.round(camera.absolutePose(), decimals=2)}")
+    camera.updateRelative()
+    print(f"T_rel:\n {np.round(camera.relativePose(), decimals=2)}")
+
+    return camera.relativePose()
+
+def countOut(map):
+    out = 0 
+    for elem in map:
+        id, point = elem 
+        if(point[2] <= 0):
+            out+=1
+    return out
 
 def main():
-    gt = u.read_traj()
+    camera = cam.Camera(K)
+    solver = s.PICP(camera=camera)
+    path_frame0 = u.generate_path(0)
+    path_frame1 = u.generate_path(1)
 
-    gt_traj = []
-    est_traj = []
+    data_frame0 = u.extract_measurements(path_frame0)
+    data_frame1 = u.extract_measurements(path_frame1)
 
-    v = vo.VisualOdometry()
-    #world in frame 0 (estimated)
-    T = v.cam.absolutePose()
-    #frame 0 in world (estimated)
-    T = u.alignWithWorldFrame(T)
-    #frame 0 in world (ground truth)
-    gt0 = u.g2T(gt[0])
-
-    gt_traj.append(gt0)
-    est_traj.append(T)
+    p0, p1, points_frame0, points_frame1, assoc = u.data_association(data_frame0, data_frame1)
     
-    #inizialize the Visual Odometry system
-    status = v.init()
-    print(f"Status system: {status}")
+    #----------Complete VO-----------
+    #Good rotation and translation is consistent to the movement (forward)
     
-    #world in frame 1 (estimated)
-    T = v.cam.absolutePose()
-    #frame 1 in world (estimated)
-    T = u.alignWithWorldFrame(T)
-    #frame 1 in world (ground truth)
-    gt1 = u.g2T(gt[1])
+    # v = vo.VisualOdometry()
+    # status = v.init()
+    # print(f"Status: {status}")
+    # T = v.cam.absolutePose()
+    # R, t = u.T2m(T)
 
-    gt_traj.append(gt1)
-    est_traj.append(T)
-
-    # print("frame 1 in world:")
-    # print(f"T:\n {est_traj[1]},\n gt:\n {gt_traj[1]}")
-
-    print("Compute...")
-    print("----------------------")
-    iter = 90
-    for i in range(2, iter):
-        print(f"[Main]Update pose with frame {i}")
-        v.run(i)
-        #world in frame i
-        T = v.cam.absolutePose()
-        #frame i in world
-        T = u.alignWithWorldFrame(T)
-        gti = u.g2T(gt[i])
-
-        gt_traj.append(gti)
-        est_traj.append(T)
-
-        print("======================")
+    #print(f"R:\n {R}, \nt:\n {t}")
     
-    plot(gt_traj, est_traj)
-    #evaluate(est_traj, gt_traj)
+    #----------Complete VO-----------
+
+    #----------Internal VO-----------
+    #With this the test=versus is scaled (value large but its normal)
+    
+    # R, t = u.compute_pose(p0, p1, K)
+
+    # R = np.round(R)
+    # t = np.round(t)
+
+    # print(f"R:\n {R}, \nt:\n {t}")
+    
+    #----------Internal VO-----------
+
+    #----------GT-----------
+    T0_gt = u.g2T(gt[0])  # frame 0 in world frame (w_T_0)
+    T1_gt = u.g2T(gt[1])  # frame 1 in world frame (w_T_1)
+
+    # Compute relative pose: 0_T_1 = 0_T_w @ w_T_1
+    T_rel = np.linalg.inv(T0_gt) @ T1_gt
+
+    # print(T_rel)
+    #T_align: transformation align with camera frame
+    #c_T_w
+    T_align = u.alignWithCameraFrame(T_rel)
+
+    R, t = u.T2m(T_align)
+
+    #print(f"R:\n {R}, \nt:\n {t}")
+
+    #----------GT-----------
+
+    # Triangulate points w.r.t. camera frame
+    map = u.triangulate(R, t, p0, p1, K, assoc)
+
+    #versus(map, world_info)
+
+    print("Frame 0:")
+    test_proj(map, points_frame0, camera)
+    
+    print("P-ICP")
+    test_picp(camera, solver, map, p1, assoc)
+
+    print("Frame 1:")
+    test_proj(map, points_frame1, camera)
+    
+    iter = 20
+    for i in range(1, iter):
+        path_frame_i = u.generate_path(i)
+        path_frame_i_next = u.generate_path(i+1)
+
+        data_fame_i = u.extract_measurements(path_frame_i)
+        data_frame_i_next = u.extract_measurements(path_frame_i_next)
+
+        p_i, p_i_next, _, points_frame_i_next, assoc = u.data_association(data_fame_i, data_frame_i_next)
+
+        print("P-ICP")
+        T = test_picp(camera, solver, map, p_i_next, assoc)
+
+        print(f"Frame {i+1}:")
+        test_proj(map, points_frame_i_next, camera)
+
+        # T = np.round(T, decimals=2)
+        # R, t = u.T2m(T)
+        Ti_gt = u.g2T(gt[i])  # frame 0 in world frame (w_T_0)
+        Ti_next_gt = u.g2T(gt[i+1])
+        
+        T_rel = np.linalg.inv(Ti_gt) @ Ti_next_gt
+        T_align = u.alignWithCameraFrame(T_rel)
+
+        R, t = u.T2m(T_align)
+
+        missing_map = u.triangulate(R, t, p_i, p_i_next, K, assoc)
+
+        print(f"Num. of points in missing map: {len(missing_map)}")
+        print(f"Out in the missing map: {countOut(missing_map)}")
+
+        id_map = [elem[0] for elem in map]
+        id_missing_map = [elem[0] for elem in missing_map]
+
+        missing = [item for item in id_missing_map if item not in set(id_map)]
+
+        missing_points = []
+        for id in missing:
+            point = u.getPoint3D(missing_map, id)
+            if(point is not None):
+                missing_points.append((id, point))
+        
+        map.extend(missing_points)
+        solver.setMap(map)
 
 
-if __name__ == "__main__":
-    main()
 
-    '''
-    Il problema rimane sempre lo stesso. Dal frame 49 la matrice H è molto vicina ad 
-    essere singolare e la stima va a caso. Bisogna capire il perchè. 
-    '''
+if __name__ == '__main__':
+    main() 
