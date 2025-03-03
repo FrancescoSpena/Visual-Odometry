@@ -67,9 +67,6 @@ def transform_point(p_cam, T):
     return p_world_homog[:3]
     
 def versus(map, world):
-    #w_T_c
-    #T = u.alignWithWorldFrame(T_align)
-
     out = 0
     for elem in map:
         id, pos_cam = elem
@@ -87,7 +84,7 @@ def versus(map, world):
         
     return out
     
-def test_proj(map, point_frame0, camera):
+def test_proj(map, point_frame, camera):
     all_equal = 0
     all_good = 0
     i = 0
@@ -96,10 +93,10 @@ def test_proj(map, point_frame0, camera):
         project_point, isvalid = camera.project_point(point)
         
         if isvalid:
-            point_true = getPoint(point_frame0, id)
+            point_true = getPoint(point_frame, id)
             if(point_true is not None):
                 all_good +=1
-                #print(f"true point: {point_true}, proj: {project_point}")
+                print(f"true point: {point_true}, proj: {project_point}")
         else:
             all_equal+=1
         i +=1
@@ -121,7 +118,6 @@ def test_picp(camera, solver, map, points, assoc):
     camera.updateRelative()
     print(f"T_rel:\n {np.round(camera.relativePose(), decimals=2)}")
 
-    return camera.relativePose()
 
 def countOut(map):
     out = 0 
@@ -185,7 +181,7 @@ def main():
 
     #----------GT-----------
 
-    # Triangulate points w.r.t. camera frame
+    # Triangulate points w.r.t. frame 0
     map = u.triangulate(R, t, p0, p1, K, assoc)
 
     #versus(map, world_info)
@@ -199,41 +195,46 @@ def main():
     print("Frame 1:")
     test_proj(map, points_frame1, camera)
     
-    iter = 20
+    iter = 2
     for i in range(1, iter):
-        path_frame_i = u.generate_path(i)
-        path_frame_i_next = u.generate_path(i+1)
+        path_frame_prev = u.generate_path(i)
+        path_frame_curr = u.generate_path(i+1)
 
-        data_fame_i = u.extract_measurements(path_frame_i)
-        data_frame_i_next = u.extract_measurements(path_frame_i_next)
+        data_fame_prev = u.extract_measurements(path_frame_prev)
+        data_frame_curr = u.extract_measurements(path_frame_curr)
 
-        p_i, p_i_next, _, points_frame_i_next, assoc = u.data_association(data_fame_i, data_frame_i_next)
+        p_prev, p_curr, points_prev, points_curr, assoc = u.data_association(data_fame_prev, data_frame_curr)
 
+        #camera align with the frame i
+        camera_for_test = cam.Camera(K)
+        camera_for_test.setCameraPose(np.round(camera.absolutePose(), decimals=2))
+        print(f"Pose of the test camera:\n {np.round(camera_for_test.absolutePose(), decimals=2)}")
+        
         print("P-ICP")
-        T = test_picp(camera, solver, map, p_i_next, assoc)
+        test_picp(camera, solver, map, p_curr, assoc)
 
         print(f"Frame {i+1}:")
-        test_proj(map, points_frame_i_next, camera)
+        test_proj(map, points_curr, camera)
 
-        # T = np.round(T, decimals=2)
-        # R, t = u.T2m(T)
-        Ti_gt = u.g2T(gt[i])  # frame 0 in world frame (w_T_0)
-        Ti_next_gt = u.g2T(gt[i+1])
+        #------Update the map------
+        T_prev = u.g2T(gt[i])   # frame i in world frame (w_T_i)
+        T_curr = u.g2T(gt[i+1]) # frame i+1 in world frame (w_T_i+1)
         
-        T_rel = np.linalg.inv(Ti_gt) @ Ti_next_gt
+        #i_T_i+1 = i_T_w @ w_T_i+1 = inv(w_T_i) @ w_T_i+1
+        T_rel = np.linalg.inv(T_prev) @ T_curr
         T_align = u.alignWithCameraFrame(T_rel)
 
         R, t = u.T2m(T_align)
 
-        missing_map = u.triangulate(R, t, p_i, p_i_next, K, assoc)
-
-        print(f"Num. of points in missing map: {len(missing_map)}")
-        print(f"Out in the missing map: {countOut(missing_map)}")
+        #3D points in the frame i
+        missing_map = u.triangulate(R, t, p_prev, p_curr, K, assoc)
 
         id_map = [elem[0] for elem in map]
         id_missing_map = [elem[0] for elem in missing_map]
 
         missing = [item for item in id_missing_map if item not in set(id_map)]
+
+        print(f"[Update map]Number of missing points: {len(missing)}")
 
         missing_points = []
         for id in missing:
@@ -241,8 +242,10 @@ def main():
             if(point is not None):
                 missing_points.append((id, point))
         
-        map.extend(missing_points)
-        solver.setMap(map)
+        # map.extend(missing_points)
+        # solver.setMap(map)
+
+        test_proj(missing_points, points_curr, camera_for_test)
 
 
 
