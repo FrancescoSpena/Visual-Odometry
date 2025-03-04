@@ -65,11 +65,10 @@ class PICP():
         for i, (id, best_id) in enumerate(assoc):
             #print(f"[Linearize]id={id},best={best_id}")
             world_point = u.getPoint3D(self.world_points, best_id)
-            image_point = self.image_points[i]
+            image_point = u.getPoint(self.image_points, id)
 
             if world_point is None or image_point is None:
-                # print("[Linearize]World Point OR Image Point are NONE")
-                # print("-------------")
+                #print("[Linearize]World Point OR Image Point are NONE")
                 continue
 
             error, J, status = self.error_and_jacobian(world_point, image_point)

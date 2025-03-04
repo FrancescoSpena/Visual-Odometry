@@ -372,9 +372,6 @@ def triangulate(R, t, points1, points2, K, assoc):
     'assoc = (ID, best_ID)'
 
     # print(f"R:\n {R}, \nt:\n {t}")
-
-    assert len(points1) == len(points2) == len(assoc)
-
     P1 = K @ np.hstack((np.eye(3), np.zeros((3, 1))))
     P2 = K @ np.hstack((R, t))
 
@@ -448,13 +445,23 @@ def compute_pose(points1, points2, K):
     return best_R, best_t
 
 
-
-
 def getPoint3D(points, id):
 
     for id_point, point in points:
         if(id_point == id):
             return point 
+    
+    return None
+
+def getPoint(point_frame, target_id):
+    'Return 2D given the id'
+    for elem in point_frame:
+        id, point = elem 
+
+        if(id == target_id):
+            point = [float(x) for x in point]
+            point = np.array(point)
+            return point
     
     return None
 
