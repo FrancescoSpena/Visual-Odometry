@@ -31,8 +31,8 @@ class Camera():
         return self.T_rel
     
     def updateRelative(self):
-        'Update the relative T from frame i and i+1'
-        self.T_rel = self.prev_T_abs @ np.linalg.inv(self.T_abs)
+        'Update the relative T from frame i and i+1 --> i_T_i+1' 
+        self.T_rel = np.linalg.inv(self.prev_T_abs) @ self.T_abs
     
     def updatePrev(self):
         'Save the T from world to camera frame i'
@@ -71,10 +71,8 @@ class Camera():
 
         z = p_cam[2]
 
-        if(z <= z_near):
-            # print("Point out of camera view")
-            # print(f"z: {z}")
-            # print("-------------------")
+        if(z <= z_near or z > z_far):
+            # print(f"[Camera][project_point]Point out of camera view, z: {z}")
             return None, False
         
         # (3 x 1)
@@ -87,23 +85,14 @@ class Camera():
         y = image_point[1]
 
         if(x < 0 or x > width-1):
-            # print("Point out of image size")
-            # print(f"x: {x}")
-            # print("-------------------")
+            # print(f"[Camera][project_point]Point out of image size, x: {x}")
             return None, False 
         
         if(y < 0 or y > height-1):
-            # print("Point out of image size")
-            # print(f"y: {y}")
-            # print("-------------------")
+            # print(f"[Camera][project_point]Point out of image size, y: {y}")
             return None, False 
 
         # print("VALID")
         # print("================")
         return image_point, True
     
-    def unprojectPixelToRay(self, pixel):
-        pixel_h = np.array([pixel[0], pixel[1], 1])
-        ray_direction = np.linalg.inv(self.cameraMatrix()) @ pixel_h
-        ray_direction /= np.linalg.norm(ray_direction)
-        return ray_direction
