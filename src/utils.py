@@ -253,7 +253,7 @@ def alignWithCameraFrame(T_world):
     T_world = H_R @ T_world @ H_R.T 
     T_world = np.linalg.inv(T_world)
 
-    return np.round(T_world, decimals=6)
+    return np.round(T_world, decimals=2)
 
 
 def read_traj(path='../data/trajectory.dat'):
