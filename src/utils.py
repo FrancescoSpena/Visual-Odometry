@@ -493,5 +493,5 @@ def subPoint(map, target_id, new_point):
     for i, (id, point) in enumerate(map):
         if id == target_id:
             map[i] = (id, new_point)
-            return True, map
-    return False, map
+            return map
+    return map

@@ -149,7 +149,7 @@ def test_picp(camera, solver, map, points_frame, assoc, T_rel_gt=None, T_abs_gt=
     #Estimated absolute pose
     T_abs = camera.absolutePose()
     T_abs_align = u.alignWithWorldFrame(T_abs)
-    T_abs_align = np.round(T_abs_align, decimals=2)
+    T_abs_align = np.round(T_abs_align, decimals=1)
     est_pose.append(T_abs_align)
     
     print(f"[test_picp]T_abs:\n {T_abs_align}")
@@ -233,7 +233,7 @@ def updateWithNewMeasurements(map, point_prev_frame, point_curr_frame, R, t, ass
             transformed_already_map.append((id, point_global))
         
         for id, point in transformed_already_map:
-            _, map = u.subPoint(map, id, point)
+            map = u.subPoint(map, id, point)
 
 
 
@@ -263,10 +263,14 @@ def process_frame(i, map, camera, solver, gt):
     T_rel = np.round(T_rel, decimals=2)
     T_align = u.alignWithCameraFrame(T_rel)
 
+    # T_rel_est = camera.relativePose()
+    # T_rel_est = np.round(T_rel_est, decimals=2)
+    # R_curr, t_curr = u.T2m(T_rel_est)
+
     R_curr, t_curr = u.T2m(T_align)
 
-    R_curr[np.abs(R_curr) < 1e-2] = 0
-    t_curr[np.abs(t_curr) < 1e-2] = 0
+    # R_curr[np.abs(R_curr) < 1e-2] = 0
+    # t_curr[np.abs(t_curr) < 1e-2] = 0
     
     gt_pose.append(T_curr)
 
@@ -280,6 +284,10 @@ def process_frame(i, map, camera, solver, gt):
     
     #------Visual Odometry------
 
+    #-------Update with new measurements-------
+    updateWithNewMeasurements(map, points_prev, points_curr, R_curr, t_curr, assoc, T_i)
+    #-------Update with new measurements-------
+
     #-------PICP-------
     #points_curr are the points in the frame i+1
     test_picp(camera, solver, map, points_curr, assoc, T_rel_gt=T_align, T_abs_gt=T_curr)
@@ -289,10 +297,7 @@ def process_frame(i, map, camera, solver, gt):
     updateMap(map, points_prev, points_curr, R_curr, t_curr, assoc, T_i)
     #-------Update Map-------
 
-    #-------Update with new measurements-------
-    updateWithNewMeasurements(map, points_prev, points_curr, R_curr, t_curr, assoc, T_i)
-    #-------Update with new measurements-------
-   
+    
 
 
 def main():
