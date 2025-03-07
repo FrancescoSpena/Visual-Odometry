@@ -233,27 +233,29 @@ def homogeneous_rotation(R):
 
 def alignWithWorldFrame(T_cam):
     'From c_T_w to w_T_c'
-    T_cam = np.linalg.inv(T_cam)
+    T_cam_cp = np.copy(T_cam)
+    T_cam_cp = np.linalg.inv(T_cam_cp)
 
     theta = np.deg2rad(90)
 
     # Combined rotation (first x, then y)
     R = Ry(theta) @ Rz(-theta)
     H_R = homogeneous_rotation(R)
-    T_cam = H_R @ T_cam @ H_R.T
+    T_cam_cp = H_R @ T_cam_cp @ H_R.T
 
-    return np.round(T_cam)
+    return T_cam_cp
 
 def alignWithCameraFrame(T_world):
     'From w_T_c to c_T_w'
+    T_world_cp = np.copy(T_world)
     theta = np.deg2rad(90)
     R = Rz(theta) @ Ry(-theta)
     H_R = homogeneous_rotation(R)
     
-    T_world = H_R @ T_world @ H_R.T 
-    T_world = np.linalg.inv(T_world)
+    T_world_cp = H_R @ T_world_cp @ H_R.T 
+    T_world_cp = np.linalg.inv(T_world_cp)
 
-    return np.round(T_world, decimals=2)
+    return T_world_cp
 
 
 def read_traj(path='../data/trajectory.dat'):
@@ -486,3 +488,10 @@ def w2C(world_point, camera_pose):
     p_cam = camera_pose @ world_point
 
     return p_cam[:3]
+
+def subPoint(map, target_id, new_point):
+    for i, (id, point) in enumerate(map):
+        if id == target_id:
+            map[i] = (id, new_point)
+            return True, map
+    return False, map

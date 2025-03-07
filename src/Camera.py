@@ -62,11 +62,11 @@ class Camera():
         'proj(u) = (ux / uz     uy / uz)'
 
         #world in camera frame
-        c_T_w = self.absolutePose()
+        c_T_w = self.T_abs
         #homogeneous coordinate
         world_point = np.append(world_point, 1)
         
-        # (4 x 1)
+        # (4 x 1)  p_i = i_T_0 @ p_0
         p_cam = c_T_w @ world_point
 
         z = p_cam[2]
