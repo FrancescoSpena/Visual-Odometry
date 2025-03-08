@@ -149,7 +149,7 @@ def test_picp(camera, solver, map, points_frame, assoc, T_rel_gt=None, T_abs_gt=
     #Estimated absolute pose
     T_abs = camera.absolutePose()
     T_abs_align = u.alignWithWorldFrame(T_abs)
-    T_abs_align = np.round(T_abs_align, decimals=1)
+    #T_abs_align = np.round(T_abs_align, decimals=2)
     est_pose.append(T_abs_align)
     
     print(f"[test_picp]T_abs:\n {T_abs_align}")
@@ -251,24 +251,19 @@ def process_frame(i, map, camera, solver, gt):
     T_curr = u.g2T(gt[i+1]) # frame i+1 in world frame (w_T_i+1)
 
     #w_T_i
-    T_i = u.alignWithCameraFrame(T_prev.copy())
-    T_i[np.abs(T_i) < 1e-2] = 0
-
-    #------Visual Odometry------
-    #The absolute pose of the camera align with the frame i
-    #T_i = camera.absolutePose()
+    # T_i = u.alignWithCameraFrame(T_prev.copy())
     # T_i[np.abs(T_i) < 1e-2] = 0
-    #------Visual Odometry------
+
+    #The absolute pose of the camera align with the frame i
+    T_i = camera.absolutePose()
 
     #i_T_i+1
     T_rel = np.linalg.inv(T_prev.copy()) @ T_curr.copy()
     T_rel = np.round(T_rel, decimals=2)
     T_align = u.alignWithCameraFrame(T_rel)
-
     R_curr, t_curr = u.T2m(T_align)
 
     # T_rel_est = camera.relativePose()
-    # T_rel_est = np.round(T_rel_est, decimals=2)
     # R_curr, t_curr = u.T2m(T_rel_est)
 
     gt_pose.append(T_curr)
@@ -307,14 +302,18 @@ def main():
     print(f"Status: {status}")
     T = v.cam.absolutePose()
     R, t = u.T2m(T)
+    R[np.abs(R) < 1e-2] = 0
+    t[np.abs(t) < 1e-2] = 0
 
-    #print(f"R:\n {R}, \nt:\n {t}")
     
     #----------Complete VO-----------
 
     #----------GT-----------
     T0_gt = u.g2T(gt[0])  # frame 0 in world frame (w_T_0)
     T1_gt = u.g2T(gt[1])  # frame 1 in world frame (w_T_1)
+
+    T_rel_gt = u.relativeMotion(T0_gt, T1_gt)
+    T_rel_gt = u.alignWithCameraFrame(T_rel_gt)
 
     #----------GT-----------
 
@@ -326,7 +325,7 @@ def main():
     map = u.triangulate(R, t, p0, p1, K, assoc)
 
     print("P-ICP")
-    test_picp(camera, solver, map, points_frame1, assoc)
+    test_picp(camera, solver, map, points_frame1, assoc, T_rel_gt=T_rel_gt, T_abs_gt=T1_gt)
 
 
     iter = args.iter
@@ -339,9 +338,9 @@ def main():
         
     print(f"Num. of est pose: {len(est_pose)}")
     print(f"Num. of gt pose: {len(gt_pose)}")
-    plot(gt_pose, est_pose)
+    #plot(gt_pose, est_pose)
 
-    #evaluate(est_pose, gt_pose)
+    evaluate(est_pose, gt_pose)
 
         
 if __name__ == '__main__':

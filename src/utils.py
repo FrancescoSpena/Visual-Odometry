@@ -400,9 +400,15 @@ def triangulate(R, t, points1, points2, K, assoc):
 
     return id_points3D
 
-def compute_pose(points1, points2, K):
+def compute_pose(points1_frame, points2_frame, K):
     'Compute E -> Pose'
 
+    points1 = [item[1] for item in points1_frame]
+    points2 = [item[1] for item in points2_frame]
+
+    points1 = np.array(points1, dtype=np.float32)
+    points2 = np.array(points2, dtype=np.float32)
+    
     E, mask = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, threshold=1.0, prob=0.999)
     
     #print(f"Essential Matrix:\n {E}")
