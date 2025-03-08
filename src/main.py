@@ -247,7 +247,6 @@ def process_frame(i, map, camera, solver, gt):
     _, _, points_prev, points_curr, assoc = u.data_association(data_frame_prev, data_frame_curr)
     
     
-    #-------Relative Transformation gt-------
     T_prev = u.g2T(gt[i])   # frame i in world frame (w_T_i)
     T_curr = u.g2T(gt[i+1]) # frame i+1 in world frame (w_T_i+1)
 
@@ -255,34 +254,25 @@ def process_frame(i, map, camera, solver, gt):
     T_i = u.alignWithCameraFrame(T_prev.copy())
     T_i[np.abs(T_i) < 1e-2] = 0
 
-    # T_i1 = u.alignWithCameraFrame(T_curr.copy())
-    # T_i1[np.abs(T_i1) < 1e-2] = 0
+    #------Visual Odometry------
+    #The absolute pose of the camera align with the frame i
+    #T_i = camera.absolutePose()
+    # T_i[np.abs(T_i) < 1e-2] = 0
+    #------Visual Odometry------
 
     #i_T_i+1
     T_rel = np.linalg.inv(T_prev.copy()) @ T_curr.copy()
     T_rel = np.round(T_rel, decimals=2)
     T_align = u.alignWithCameraFrame(T_rel)
 
+    R_curr, t_curr = u.T2m(T_align)
+
     # T_rel_est = camera.relativePose()
     # T_rel_est = np.round(T_rel_est, decimals=2)
     # R_curr, t_curr = u.T2m(T_rel_est)
 
-    R_curr, t_curr = u.T2m(T_align)
-
-    # R_curr[np.abs(R_curr) < 1e-2] = 0
-    # t_curr[np.abs(t_curr) < 1e-2] = 0
-    
     gt_pose.append(T_curr)
 
-
-    #-------Relative Transformation gt-------
-
-    #------Visual Odometry------
-    #The absolute pose of the camera align with the frame i
-    # T_i = camera.absolutePose()
-    # T_i[np.abs(T_i) < 1e-2] = 0
-    
-    #------Visual Odometry------
 
     #-------Update with new measurements-------
     updateWithNewMeasurements(map, points_prev, points_curr, R_curr, t_curr, assoc, T_i)
@@ -312,11 +302,11 @@ def main():
     #----------Complete VO-----------
     #Good rotation and translation is consistent to the movement (forward)
     
-    # v = vo.VisualOdometry()
-    # status = v.init()
-    # print(f"Status: {status}")
-    # T = v.cam.absolutePose()
-    # R, t = u.T2m(T)
+    v = vo.VisualOdometry()
+    status = v.init()
+    print(f"Status: {status}")
+    T = v.cam.absolutePose()
+    R, t = u.T2m(T)
 
     #print(f"R:\n {R}, \nt:\n {t}")
     
@@ -325,11 +315,6 @@ def main():
     #----------GT-----------
     T0_gt = u.g2T(gt[0])  # frame 0 in world frame (w_T_0)
     T1_gt = u.g2T(gt[1])  # frame 1 in world frame (w_T_1)
-
-    # Compute relative pose: 0_T_1 = 0_T_w @ w_T_1
-    T_rel = np.linalg.inv(T0_gt) @ T1_gt
-    T_align = u.alignWithCameraFrame(T_rel)
-    R, t = u.T2m(T_align)
 
     #----------GT-----------
 
@@ -340,15 +325,10 @@ def main():
     # Triangulate points w.r.t. frame 0
     map = u.triangulate(R, t, p0, p1, K, assoc)
 
-    print("Frame 0:")
-    test_proj(map, points_frame0, camera)
-    
     print("P-ICP")
     test_picp(camera, solver, map, points_frame1, assoc)
 
-    print("Frame 1:")
-    test_proj(map, points_frame1, camera)
-    
+
     iter = args.iter
     if(iter > 120): 
         iter = 120
