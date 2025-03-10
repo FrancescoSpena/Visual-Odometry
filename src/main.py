@@ -1,6 +1,5 @@
 import utils as u 
 import numpy as np
-import VisualOdometry as vo
 import Camera as cam
 import PICP_solver as s
 import argparse
@@ -29,6 +28,7 @@ solver = s.PICP(camera=camera)
 
 gt_pose = []
 est_pose = []
+
 
 def plot(gt_traj, est_traj, map_points=None):
     est_traj = np.array(est_traj)
@@ -140,17 +140,21 @@ def test_proj(map, point_curr_frame, camera):
 
     
 def test_picp(camera, solver, map, points_frame, assoc, T_rel_gt=None, T_abs_gt=None):
-    camera.updatePrev()
+
+    prev_T_abs = camera.absolutePose().copy()
+        
     iter_icp = args.picp 
     for _ in range(iter_icp):
         solver.initial_guess(camera, map, points_frame)
         solver.one_round(assoc)
         camera.updatePoseICP(solver.dx)
     
+    camera.updateRelative(prev_T_abs, camera.absolutePose())
+
     #Estimated absolute pose
-    T_abs = camera.absolutePose()
+    T_abs = camera.absolutePose().copy()
     T_abs_align = u.alignWithWorldFrame(T_abs)
-    #T_abs_align = np.round(T_abs_align, decimals=2)
+    T_abs_align = np.round(T_abs_align, decimals=1)
     est_pose.append(T_abs_align)
     
     print(f"[test_picp]T_abs:\n {T_abs_align}")
@@ -159,7 +163,6 @@ def test_picp(camera, solver, map, points_frame, assoc, T_rel_gt=None, T_abs_gt=
     if(T_abs_gt is not None):
         print(f"[test_picp]T_abs_gt:\n {T_abs_gt}")
         
-    camera.updateRelative()
 
     #Estimated relative pose
     print(f"[test_picp]T_rel:\n {np.round(camera.relativePose(), decimals=2)}")
@@ -235,8 +238,8 @@ def updateWithNewMeasurements(map, point_prev_frame, point_curr_frame, R, t, ass
         
         for id, point in transformed_already_map:
             map = u.subPoint(map, id, point)
-
-
+    else:
+        print(f"[UpdateWithNewMeasurements]already_in_map is empty")
 
 def process_frame(i, map, camera, solver, gt):
     path_frame_prev = u.generate_path(i)
@@ -250,6 +253,7 @@ def process_frame(i, map, camera, solver, gt):
     
     T_prev = u.g2T(gt[i])   # frame i in world frame (w_T_i)
     T_curr = u.g2T(gt[i+1]) # frame i+1 in world frame (w_T_i+1)
+    
 
     #w_T_i
     # T_i = u.alignWithCameraFrame(T_prev.copy())
@@ -257,6 +261,7 @@ def process_frame(i, map, camera, solver, gt):
 
     #The absolute pose of the camera align with the frame i
     T_i = camera.absolutePose()
+    T_i[np.abs(T_i) < 1e-1] = 0
 
     #i_T_i+1
     T_rel = np.linalg.inv(T_prev.copy()) @ T_curr.copy()
@@ -264,9 +269,11 @@ def process_frame(i, map, camera, solver, gt):
     T_align = u.alignWithCameraFrame(T_rel)
     R_curr, t_curr = u.T2m(T_align)
 
-    # T_rel_est = camera.relativePose()
-    # R_curr, t_curr = u.T2m(T_rel_est)
 
+    # T_rel_est = camera.relativePose().copy()
+    # T_rel_est = np.round(T_rel_est, decimals=2)
+    # R_curr, t_curr = u.T2m(T_rel_est)
+    
     gt_pose.append(T_curr)
 
 
@@ -274,9 +281,16 @@ def process_frame(i, map, camera, solver, gt):
     updateWithNewMeasurements(map, points_prev, points_curr, R_curr, t_curr, assoc, T_i)
     #-------Update with new measurements-------
 
+
     #-------PICP-------
     #points_curr are the points in the frame i+1
-    test_picp(camera, solver, map, points_curr, assoc, T_rel_gt=T_align, T_abs_gt=T_curr)
+    test_picp(camera=camera,
+              solver=solver,
+              map=map,
+              points_frame=points_curr,
+              assoc=assoc,
+              T_rel_gt=T_align,
+              T_abs_gt=T_curr)
     #-------PICP-------
 
     #-------Update Map-------
@@ -287,6 +301,7 @@ def process_frame(i, map, camera, solver, gt):
 
 
 def main():
+    print("From frame 0 to 1")
     path_frame0 = u.generate_path(0)
     path_frame1 = u.generate_path(1)
 
@@ -298,15 +313,12 @@ def main():
     #----------Complete VO-----------
     #Good rotation and translation is consistent to the movement (forward)
     
-    v = vo.VisualOdometry()
-    status = v.init()
-    print(f"Status: {status}")
-    T = v.cam.absolutePose()
-    R, t = u.T2m(T)
+    R, t = u.compute_pose(points_frame0, points_frame1, K=K)
     R[np.abs(R) < 1e-2] = 0
     t[np.abs(t) < 1e-2] = 0
+    camera.setCameraPose(u.m2T(R, t))
 
-    
+
     #----------Complete VO-----------
 
     #----------GT-----------
@@ -314,7 +326,8 @@ def main():
     T1_gt = u.g2T(gt[1])  # frame 1 in world frame (w_T_1)
 
     T_rel_gt = u.relativeMotion(T0_gt, T1_gt)
-    T_rel_gt = u.alignWithCameraFrame(T_rel_gt)
+    #T_rel_gt = u.alignWithCameraFrame(T_rel_gt)
+    #R, t = u.T2m(T_rel_gt)
 
     #----------GT-----------
 
@@ -325,9 +338,10 @@ def main():
     # Triangulate points w.r.t. frame 0
     map = u.triangulate(R, t, p0, p1, K, assoc)
 
-    print("P-ICP")
-    test_picp(camera, solver, map, points_frame1, assoc, T_rel_gt=T_rel_gt, T_abs_gt=T1_gt)
-
+    print(f"T_abs:\n {np.round(u.alignWithWorldFrame(camera.absolutePose()), decimals=2)}")
+    print(f"T_abs_gt:\n {T1_gt}")
+    print(f"T_rel:\n {np.round(u.alignWithWorldFrame(camera.relativePose()), decimals=2)}")
+    print(f"T_rel_gt:\n {T_rel_gt}")
 
     iter = args.iter
     if(iter > 120): 
@@ -343,7 +357,7 @@ def main():
     if(args.plot):
         plot(gt_pose, est_pose)
 
-    evaluate(est_pose, gt_pose)
+    #evaluate(est_pose, gt_pose)
 
         
 if __name__ == '__main__':

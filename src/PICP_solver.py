@@ -1,7 +1,6 @@
 import numpy as np 
 import utils as u
-from scipy.sparse.linalg import splu
-from scipy.sparse import csc_matrix
+
 
 class PICP():
     def __init__(self, camera):
@@ -62,13 +61,21 @@ class PICP():
         H = np.zeros((6,6))
         b = np.zeros((6,1))
 
+        no_valid_world = 0
+        no_valid_image = 0
+
         for i, (id, best_id) in enumerate(assoc):
             #print(f"[Linearize]id={id},best={best_id}")
             world_point = u.getPoint3D(self.world_points, str(best_id))
             image_point = u.getPoint(self.image_points, str(id))
 
-            if world_point is None or image_point is None:
-                #print("[Linearize]World Point OR Image Point are NONE")
+            if world_point is None:
+                #print(f"[Linearize]World Point its NONE with id: {best_id}")
+                no_valid_world +=1
+                continue
+            if image_point is None: 
+                #print(f"[Linearize]Image Point its NONE with id: {id}")
+                no_valid_image += 1
                 continue
 
             error, J, status = self.error_and_jacobian(world_point, image_point)
@@ -83,6 +90,7 @@ class PICP():
             # (6 x 2) * (2 x 1) = (6 x 1)
             b += J.T @ error
 
+        #print(f"no valid world: {no_valid_world}, no valid image: {no_valid_image}")
         return H, b
 
     def solve(self, H, b): 

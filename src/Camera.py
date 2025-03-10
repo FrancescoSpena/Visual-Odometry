@@ -1,5 +1,6 @@
 import numpy as np
 import utils as u
+import numpy as np
 
 class Camera():
     def __init__(self, K, z_near=0, z_far=5, width=640, height=480):
@@ -20,7 +21,6 @@ class Camera():
         self.z_far = z_far
         self.width = width
         self.height = height
-        self.tolerance = 1e-2
     
     def absolutePose(self):
         'Return the absolute pose (from frame 0 to frame i+1)'
@@ -30,9 +30,11 @@ class Camera():
         'Return the relative pose'
         return self.T_rel
     
-    def updateRelative(self):
-        'Update the relative T from frame i and i+1 --> i_T_i+1' 
-        self.T_rel = np.linalg.inv(self.prev_T_abs) @ self.T_abs
+    def updateRelative(self, prev_T_abs, T_abs):
+        'compute relative pose'
+        inv = np.linalg.inv(prev_T_abs)
+        self.T_rel = inv @ T_abs
+        
     
     def updatePrev(self):
         'Save the T from world to camera frame i'

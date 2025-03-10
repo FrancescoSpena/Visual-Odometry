@@ -408,13 +408,10 @@ def compute_pose(points1_frame, points2_frame, K):
     return best_R, best_t
 
 
-def getPoint3D(points, id):
-    #type(id) = str
-
-    for id_point, point in points:
-        if(id_point == id):
-            return point 
-    
+def getPoint3D(point_frame, target_id):
+    for id, point in point_frame:
+        if(id == target_id):
+            return point
     return None
 
 def getPoint(point_frame, target_id):
