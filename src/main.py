@@ -141,15 +141,13 @@ def test_proj(map, point_curr_frame, camera):
     
 def test_picp(camera, solver, map, points_frame, assoc, T_rel_gt=None, T_abs_gt=None):
 
-    prev_T_abs = camera.absolutePose().copy()
-        
     iter_icp = args.picp 
     for _ in range(iter_icp):
         solver.initial_guess(camera, map, points_frame)
         solver.one_round(assoc)
         camera.updatePoseICP(solver.dx)
     
-    camera.updateRelative(prev_T_abs, camera.absolutePose())
+    camera.updateRelative(camera.absolutePose().copy())
 
     #Estimated absolute pose
     T_abs = camera.absolutePose().copy()
@@ -212,24 +210,37 @@ def updateMap(map, point_prev_frame, point_curr_frame, R, t, assoc, T_i):
 
         map.extend(transformed_missing_map)
 
+        return map
+
 def updateWithNewMeasurements(map, point_prev_frame, point_curr_frame, R, t, assoc, T_i):
     id_map = [item[0] for item in map]
     id_curr_frame = [item[0] for item in point_curr_frame]
 
     already_in_map = [item for item in id_curr_frame if item in set(id_map)]
 
-    if(len(already_in_map) != 0):
+    if len(already_in_map) != 0:
         point_prev = []
         point_curr = []
+        
         for elem in already_in_map:
-            point_prev.append(u.getPoint(point_prev_frame, str(elem)))
-            point_curr.append(u.getPoint(point_curr_frame, str(elem)))
+            prev_point = u.getPoint(point_prev_frame, str(elem))
+            curr_point = u.getPoint(point_curr_frame, str(elem))
+            
+            if prev_point is not None and curr_point is not None:
+                point_prev.append(prev_point)
+                point_curr.append(curr_point)
+            else:
+                print(f"[updateWithNewMeasurements] Point_prev or Point_curr is None for ID={elem}")
         
         assoc_points = [(id, best) for id, best in assoc if id in already_in_map]
 
-        #New points in frame i
+        # New points in frame i
         new_triangulation_map = u.triangulate(R, t, point_prev, point_curr, K, assoc_points)
 
+        if len(new_triangulation_map) == 0:
+            print("[updateWithNewMeasurements] Triangulation returned an empty map")
+            return map
+        
         transformed_already_map = []
         T_i_inv = np.linalg.inv(T_i)
         for id, point in new_triangulation_map:
@@ -238,8 +249,12 @@ def updateWithNewMeasurements(map, point_prev_frame, point_curr_frame, R, t, ass
         
         for id, point in transformed_already_map:
             map = u.subPoint(map, id, point)
+        
+        print("[updateWithNewMeasurements] Map updated successfully")
     else:
-        print(f"[UpdateWithNewMeasurements]already_in_map is empty")
+        print("[updateWithNewMeasurements] No points already in map")
+
+    return map
 
 def process_frame(i, map, camera, solver, gt):
     path_frame_prev = u.generate_path(i)
@@ -254,14 +269,13 @@ def process_frame(i, map, camera, solver, gt):
     T_prev = u.g2T(gt[i])   # frame i in world frame (w_T_i)
     T_curr = u.g2T(gt[i+1]) # frame i+1 in world frame (w_T_i+1)
     
-
     #w_T_i
-    # T_i = u.alignWithCameraFrame(T_prev.copy())
-    # T_i[np.abs(T_i) < 1e-2] = 0
+    T_i = u.alignWithCameraFrame(T_prev.copy())
+    T_i[np.abs(T_i) < 1e-2] = 0
 
     #The absolute pose of the camera align with the frame i
-    T_i = camera.absolutePose()
-    T_i[np.abs(T_i) < 1e-1] = 0
+    # T_i = camera.absolutePose()
+    # T_i[np.abs(T_i) < 1e-1] = 0
 
     #i_T_i+1
     T_rel = np.linalg.inv(T_prev.copy()) @ T_curr.copy()
@@ -277,9 +291,35 @@ def process_frame(i, map, camera, solver, gt):
     gt_pose.append(T_curr)
 
 
+    #-------Debug-------
+    print("---------")
+    print("Before the function:")
+    print(f"Absolute pose of the camera:\n {np.round(camera.absolutePose(), decimals=2)}")
+    print(f"Relative pose of the camera:\n {np.round(camera.relativePose(), decimals=2)}")
+    print(f"len of the map: {len(map)}")
+    print(f"len of assoc: {len(assoc)}")
+    print(f"Point curr: {len(points_curr)}")
+    print(f"Point prev: {len(points_prev)}")
+    print(f"R_curr:\n {R_curr} \nt_curr:\n {t_curr}")
+    #-------Debug-------
+
     #-------Update with new measurements-------
-    updateWithNewMeasurements(map, points_prev, points_curr, R_curr, t_curr, assoc, T_i)
+    map = updateWithNewMeasurements(map, points_prev, points_curr, R_curr, t_curr, assoc, T_i)
     #-------Update with new measurements-------
+
+    #-------Debug-------
+    print("---------")
+    print("After the function:")
+    print(f"Absolute pose of the camera:\n {np.round(camera.absolutePose(), decimals=2)}")
+    print(f"Relative pose of the camera:\n {np.round(camera.relativePose(), decimals=2)}")
+    print(f"len of the map: {len(map)}")
+    print(f"len of assoc: {len(assoc)}")
+    print(f"Point curr: {len(points_curr)}")
+    print(f"Point prev: {len(points_prev)}")
+    print(f"R_curr:\n {R_curr} \nt_curr:\n {t_curr}")
+    print("---------")
+
+    #-------Debug-------
 
 
     #-------PICP-------
@@ -294,7 +334,7 @@ def process_frame(i, map, camera, solver, gt):
     #-------PICP-------
 
     #-------Update Map-------
-    updateMap(map, points_prev, points_curr, R_curr, t_curr, assoc, T_i)
+    map = updateMap(map, points_prev, points_curr, R_curr, t_curr, assoc, T_i)
     #-------Update Map-------
 
     
@@ -314,8 +354,8 @@ def main():
     #Good rotation and translation is consistent to the movement (forward)
     
     R, t = u.compute_pose(points_frame0, points_frame1, K=K)
-    R[np.abs(R) < 1e-2] = 0
-    t[np.abs(t) < 1e-2] = 0
+    R[np.abs(R) < 1e-1] = 0
+    t[np.abs(t) < 1e-1] = 0
     camera.setCameraPose(u.m2T(R, t))
 
 

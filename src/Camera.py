@@ -1,6 +1,5 @@
 import numpy as np
 import utils as u
-import numpy as np
 
 class Camera():
     def __init__(self, K, z_near=0, z_far=5, width=640, height=480):
@@ -30,16 +29,12 @@ class Camera():
         'Return the relative pose'
         return self.T_rel
     
-    def updateRelative(self, prev_T_abs, T_abs):
-        'compute relative pose'
-        inv = np.linalg.inv(prev_T_abs)
-        self.T_rel = inv @ T_abs
+    def updateRelative(self, T_abs_new):
+        'Compute the relative pose given a new absolute pose'
+        inv = np.linalg.inv(self.T_abs)
+        self.T_rel = inv @ T_abs_new
+        return self.T_rel
         
-    
-    def updatePrev(self):
-        'Save the T from world to camera frame i'
-        self.prev_T_abs = self.T_abs
-
     def updatePoseICP(self, dx):
         'Update absolute pose'
         self.T_abs = u.v2T(dx) @ self.T_abs
@@ -55,7 +50,7 @@ class Camera():
         return self.K
     
     def proj(self, u):
-        'prospective projection'
+        'Prospective projection'
         return np.array([u[0]/u[2], u[1]/u[2]])
 
     def project_point(self, world_point, width=640, height=480, z_near=0, z_far=5): 
@@ -63,9 +58,9 @@ class Camera():
         'image_point = proj(K T_cam^-1 * world_point)'
         'proj(u) = (ux / uz     uy / uz)'
 
-        #world in camera frame
+        # World in camera frame
         c_T_w = self.T_abs
-        #homogeneous coordinate
+        # Homogeneous coordinate
         world_point = np.append(world_point, 1)
         
         # (4 x 1)  p_i = i_T_0 @ p_0
@@ -97,4 +92,4 @@ class Camera():
         # print("VALID")
         # print("================")
         return image_point, True
-    
+

@@ -446,6 +446,7 @@ def w2C(world_point, camera_pose):
     return p_cam[:3]
 
 def subPoint(map, target_id, new_point):
+    new_point = np.array(new_point, dtype=np.float32)
     for i, (id, point) in enumerate(map):
         if id == target_id:
             map[i] = (id, new_point)
