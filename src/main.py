@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser(description="Main script Visual Odometry")
 parser.add_argument('--iter', type=int, required=True, help="Number of iterations")
 parser.add_argument('--picp', type=int, required=True, help="Number of iterations for icp")
+parser.add_argument('--plot', type=bool, required=False, help="Active Plot", default=False)
 args = parser.parse_args()
 
 #Camera
@@ -338,7 +339,9 @@ def main():
         
     print(f"Num. of est pose: {len(est_pose)}")
     print(f"Num. of gt pose: {len(gt_pose)}")
-    #plot(gt_pose, est_pose)
+    
+    if(args.plot):
+        plot(gt_pose, est_pose)
 
     evaluate(est_pose, gt_pose)
 

@@ -307,68 +307,6 @@ def data_association(first_data, second_data):
 
     return p0, p1, points_first, points_second, assoc
 
-def old_data_association(first_data, second_data):
-    '''
-    first_data or second_data: return {
-        'Point_IDs': df_points['Point_ID'].tolist(),
-        'Actual_IDs': df_points['Actual_ID'].tolist(),
-        'Image_X': df_points['Image_X'].tolist(),
-        'Image_Y': df_points['Image_Y'].tolist(),
-        'Appearance_Features': df_points['Appearance_Features'].tolist()
-    }
-
-    Point_IDs is a progressive index indicating how many measurements you have in a single image.
-    
-    Actual_IDs is a UNIQUE index considering all points in the world.
-    
-    Appearance describes the point in the image. Ideally, you have the same appearance every time you measure the SAME point.
-    In practice, this does not happen, so we choose the one with minimum cosine distance.
-    '''
-
-    point_id_first_data = first_data['Point_IDs']
-    actual_id_first_data = first_data['Actual_IDs']
-    app_first_data = first_data['Appearance_Features']
-
-    point_id_second_data = second_data['Point_IDs']
-    actual_id_second_data = second_data['Actual_IDs']
-    app_second_data = second_data['Appearance_Features']
-
-    assoc = []
-    used_second_frame_indices = set()
-
-    for i in range(len(point_id_first_data)):
-        min_distance = float('inf')
-        id_temp_first_frame = -1
-        id_temp_second_frame = -1
-        matched_index = -1
-
-        a = np.array(app_first_data[i], dtype=float)
-
-        for j in range(len(point_id_second_data)):
-            # Skip if this point in the second frame has been associated already
-            if j in used_second_frame_indices:
-                continue
-
-            b = np.array(app_second_data[j], dtype=float)
-            
-            # Compute cosine similarity and distance
-            cosine_similarity = np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-10)
-            distance = 1 - cosine_similarity  # Cosine distance
-
-            # Update the best match if distance is smaller
-            if distance < min_distance:
-                min_distance = distance
-                id_temp_first_frame = actual_id_first_data[i]
-                id_temp_second_frame = actual_id_second_data[j]
-                matched_index = j
-
-        # If a match was found, record it and mark it as used
-        if matched_index != -1:
-            assoc.append((id_temp_first_frame, id_temp_second_frame))
-            used_second_frame_indices.add(matched_index)
-
-    return assoc
-
 def triangulate(R, t, points1, points2, K, assoc):
     'Return a list of 3d points (ID, (X, Y, Z))'
     'assoc = (ID, best_ID)'
@@ -400,8 +338,20 @@ def triangulate(R, t, points1, points2, K, assoc):
 
     return id_points3D
 
+def check_essential(E):
+    U, S, Vt = np.linalg.svd(E)
+
+    rank_valid = np.isclose(S[2], 0, atol=1e-6) and np.isclose(S[0], S[1], atol=1e-3)
+    det_valid = np.isclose(np.linalg.det(E), 0, atol=1e-6)
+
+    return rank_valid and det_valid, {"singular_values": S, "determinant": np.linalg.det(E)}
+
+
 def compute_pose(points1_frame, points2_frame, K):
     'Compute E -> Pose'
+
+    if not points1_frame or not points2_frame:
+        raise ValueError("Input points cannot be empty")
 
     points1 = [item[1] for item in points1_frame]
     points2 = [item[1] for item in points2_frame]
@@ -411,7 +361,10 @@ def compute_pose(points1_frame, points2_frame, K):
     
     E, mask = cv2.findEssentialMat(points1, points2, K, method=cv2.RANSAC, threshold=1.0, prob=0.999)
     
-    #print(f"Essential Matrix:\n {E}")
+    valid, info = check_essential(E)
+    if not valid:
+        raise ValueError(f"Invalid Essential Matrix: {info}")
+
     
     points1 = points1[mask.ravel() == 1]    
     points2 = points2[mask.ravel() == 1]
@@ -437,11 +390,10 @@ def compute_pose(points1_frame, points2_frame, K):
         points2 = points2.T
 
         points4D = cv2.triangulatePoints(P1, P2, points1, points2)
-        points4D /= points4D[3]
+        points4D /= points4D[3]  # Normalize homogeneous coordinates
         
         return countPointsInFront(points4D, P2)
 
-        
     best_R, best_t = np.eye(3), np.zeros((3,1))
     max_points_in_front = -1
     
@@ -449,6 +401,7 @@ def compute_pose(points1_frame, points2_frame, K):
         count_in_front = bestSolution(R_cand, t_cand, K, points1, points2)
         #print(f"[Estimate pose]Count in front: {count_in_front}")
         if count_in_front >= max_points_in_front:
+            #print("[Estimate pose]Find new")
             max_points_in_front = count_in_front
             best_R, best_t = R_cand, t_cand
 

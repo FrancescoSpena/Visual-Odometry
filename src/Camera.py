@@ -44,8 +44,8 @@ class Camera():
 
     def setCameraPose(self, pose):
         'Update the absolute pose with the pose (T_abs=pose)'
-        self.T_rel = pose
         self.T_abs = pose
+        self.T_rel = pose
         self.prev_T_abs = pose
     
     def cameraMatrix(self):
