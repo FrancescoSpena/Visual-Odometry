@@ -66,8 +66,8 @@ class PICP():
 
         for i, (id, best_id) in enumerate(assoc):
             #print(f"[Linearize]id={id},best={best_id}")
-            world_point = u.getPoint3D(self.world_points, str(best_id))
-            image_point = u.getPoint(self.image_points, str(id))
+            world_point = u.getPoint3D(self.world_points, id)
+            image_point = u.getPoint(self.image_points, best_id)
 
             if world_point is None:
                 #print(f"[Linearize]World Point its NONE with id: {best_id}")

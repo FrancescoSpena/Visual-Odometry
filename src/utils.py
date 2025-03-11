@@ -269,6 +269,27 @@ def read_traj(path='../data/trajectory.dat'):
                 gt.append(gt_pose)
     return gt
 
+def getMeasurementsFromDataFrame(second_data):
+    pass
+
+def association3d(map, points_frame_curr, camera):
+    points_proj = []
+    assoc_3d = []
+
+    for elem in map:
+        id, point = elem 
+        point_proj, isvalid = camera.project_point(point)
+        if(isvalid):
+            points_proj.append((id, point_proj))
+    
+    for (elem_proj, elem_curr) in zip(points_proj, points_frame_curr):
+        id_proj, point_proj = elem_proj
+        id_curr, _ = elem_curr
+        if(id_proj == id_curr):
+            assoc_3d.append((id_proj, id_curr))
+
+    return assoc_3d
+
 def data_association(first_data, second_data):
     'Return p0, p1, points_first=(ID, (x, y)), points_second=(ID, (x,y)), assoc=(ID, best)'
     point_id_first_data = first_data['Point_IDs']

@@ -29,7 +29,7 @@ solver = s.PICP(camera=camera)
 gt_pose = []
 est_pose = []
 
-
+#------For testing------
 def plot(gt_traj, est_traj, map_points=None):
     est_traj = np.array(est_traj)
     pos_est = np.array([T[:3, 3] for T in est_traj])
@@ -91,8 +91,7 @@ def evaluate(est_traj, gt_traj):
 
     print(f"total poses: {len(est_traj)-1}")
     print(f"out of range: {out}")
-
-    
+ 
 def transform_point(p_cam, T):
     p_homog = np.append(p_cam, 1.0)
     p_world_homog = T @ p_homog
@@ -128,7 +127,8 @@ def test_proj(map, point_curr_frame, camera):
             valid +=1
             point = u.getPoint(point_curr_frame, str(id))
             if(point is not None):
-                print(f"ID={id}, measure: {point}, proj: {project_point}")
+                #print(f"ID={id}, measure: {point}, proj: {project_point}")
+                print(f"distance: {np.round(np.linalg.norm(np.array(point) - np.array(project_point)), decimals=1)}")
         else:
             print(f"[test_proj]ID={id} No valid projection")
             no_valid +=1
@@ -137,208 +137,61 @@ def test_proj(map, point_curr_frame, camera):
     print(f"Projections not valid: {no_valid}")
     print(f"Number of points in the map: {len(map)}")
     print("--Finish Data for this call--") 
-
+#------For testing------
     
-def test_picp(camera, solver, map, points_frame, assoc, T_rel_gt=None, T_abs_gt=None):
-
-    iter_icp = args.picp 
-    for _ in range(iter_icp):
-        solver.initial_guess(camera, map, points_frame)
-        solver.one_round(assoc)
+def picp(map, points_curr, camera, assoc_3d, i):
+    iter_picp = args.picp
+    for _ in range(iter_picp):
+        solver.initial_guess(camera, map, points_curr)
+        solver.one_round(assoc_3d)
         camera.updatePoseICP(solver.dx)
     
-    camera.updateRelative(camera.absolutePose().copy())
+    T_abs_est = camera.absolutePose().copy()
+    T_abs_est = u.alignWithWorldFrame(T_abs_est)
+    T_abs_est = np.round(T_abs_est, decimals=1)
+    T_abs_est[np.abs(T_abs_est) < 1e-1] = 0
 
-    #Estimated absolute pose
-    T_abs = camera.absolutePose().copy()
-    T_abs_align = u.alignWithWorldFrame(T_abs)
-    T_abs_align = np.round(T_abs_align, decimals=1)
-    est_pose.append(T_abs_align)
+    T_abs_gt = u.g2T(gt[i+1])
+    T_abs_gt = np.round(T_abs_gt, decimals=1)
+    T_abs_gt[np.abs(T_abs_gt) < 1e-1] = 0
     
-    print(f"[test_picp]T_abs:\n {T_abs_align}")
-    
-    #GT absolute pose
-    if(T_abs_gt is not None):
-        print(f"[test_picp]T_abs_gt:\n {T_abs_gt}")
-        
+    print(f"[process_frame]T_abs_est:\n {T_abs_est}")
+    print(f"[process_frame]T_abs_gt:\n {T_abs_gt}")      
 
-    #Estimated relative pose
-    print(f"[test_picp]T_rel:\n {np.round(camera.relativePose(), decimals=2)}")
-    
-    #GT relative pose
-    if(T_rel_gt is not None):
-        print(f"[test_picp]T_rel_gt:\n {np.round(T_rel_gt, decimals=2)}")
-        
 
-def updateMap(map, point_prev_frame, point_curr_frame, R, t, assoc, T_i):
-    #map[i] = (ID, (x, y, z))
-    #point_prev_frame[i] = (ID, (x, y))
-    #point_curr_frame[i] = (ID, (x, y))
-    #assoc[i] = (ID, best_ID)
-    #T_i its the transformation 0_T_i
+def updateMap(map):
+    pass
 
-    id_in_map = [item[0] for item in map]
-    id_curr_frame = [item[0] for item in point_curr_frame]
- 
-    #ID not in map
-    missing = [item for item in id_curr_frame if item not in set(id_in_map)]
-    
-    if(len(missing) != 0):
-        points_prev = []
-        points_curr = []
-        for elem in missing:
-            point_prev = u.getPoint(point_prev_frame, str(elem))
-            point_curr = u.getPoint(point_curr_frame, str(elem))
+def retriangulation(map):
+    pass
 
-            if(point_prev is not None and point_curr is not None):
-                points_prev.append(point_prev)
-                points_curr.append(point_curr)
-            else:
-                print("[updateMap]Point_prev or Point_curr its None")
-        
-        missing_assoc = [(key, value) for key, value in assoc if key in missing]
-
-        #New triangulated points w.r.t. frame i
-        missing_map = u.triangulate(R, t, points_prev, points_curr, K, missing_assoc)
-
-        #Take the missing map and transform all the point in the global frame
-        transformed_missing_map = []
-        T_i_inv = np.linalg.inv(T_i)
-        for id, point in missing_map:
-            point_global = transform_point(point, T_i_inv)
-            transformed_missing_map.append((id, point_global))
-
-        map.extend(transformed_missing_map)
-
-        return map
-
-def updateWithNewMeasurements(map, point_prev_frame, point_curr_frame, R, t, assoc, T_i):
-    id_map = [item[0] for item in map]
-    id_curr_frame = [item[0] for item in point_curr_frame]
-
-    already_in_map = [item for item in id_curr_frame if item in set(id_map)]
-
-    if len(already_in_map) != 0:
-        point_prev = []
-        point_curr = []
-        
-        for elem in already_in_map:
-            prev_point = u.getPoint(point_prev_frame, str(elem))
-            curr_point = u.getPoint(point_curr_frame, str(elem))
-            
-            if prev_point is not None and curr_point is not None:
-                point_prev.append(prev_point)
-                point_curr.append(curr_point)
-            else:
-                print(f"[updateWithNewMeasurements] Point_prev or Point_curr is None for ID={elem}")
-        
-        assoc_points = [(id, best) for id, best in assoc if id in already_in_map]
-
-        # New points in frame i
-        new_triangulation_map = u.triangulate(R, t, point_prev, point_curr, K, assoc_points)
-
-        if len(new_triangulation_map) == 0:
-            print("[updateWithNewMeasurements] Triangulation returned an empty map")
-            return map
-        
-        transformed_already_map = []
-        T_i_inv = np.linalg.inv(T_i)
-        for id, point in new_triangulation_map:
-            point_global = transform_point(point, T_i_inv)
-            transformed_already_map.append((id, point_global))
-        
-        for id, point in transformed_already_map:
-            map = u.subPoint(map, id, point)
-        
-        print("[updateWithNewMeasurements] Map updated successfully")
-    else:
-        print("[updateWithNewMeasurements] No points already in map")
-
-    return map
-
-def process_frame(i, map, camera, solver, gt):
+def process_frame(i, map):
+    print(f"From frame {i} to {i+1}")
     path_frame_prev = u.generate_path(i)
     path_frame_curr = u.generate_path(i+1)
 
     data_frame_prev = u.extract_measurements(path_frame_prev)
     data_frame_curr = u.extract_measurements(path_frame_curr)
 
-    _, _, points_prev, points_curr, assoc = u.data_association(data_frame_prev, data_frame_curr)
+    _, _, points_prev, points_curr, _ = u.data_association(data_frame_prev, data_frame_curr)
+
+    assoc_3d = u.association3d(map, points_curr, camera)
+
+    #------Retriangulation------
+    map = retriangulation(map)
+    #------Retriangulation------
+    
+    #------PICP------
+    picp(map, points_curr, camera, assoc_3d, i)
+    #------PICP------
+
+    #------Update map------
+    map = updateMap(map)
+    #------Update map------
     
     
-    T_prev = u.g2T(gt[i])   # frame i in world frame (w_T_i)
-    T_curr = u.g2T(gt[i+1]) # frame i+1 in world frame (w_T_i+1)
+    #test_proj(map, points_curr, camera)
     
-    #w_T_i
-    T_i = u.alignWithCameraFrame(T_prev.copy())
-    T_i[np.abs(T_i) < 1e-2] = 0
-
-    #The absolute pose of the camera align with the frame i
-    # T_i = camera.absolutePose()
-    # T_i[np.abs(T_i) < 1e-1] = 0
-
-    #i_T_i+1
-    T_rel = np.linalg.inv(T_prev.copy()) @ T_curr.copy()
-    T_rel = np.round(T_rel, decimals=2)
-    T_align = u.alignWithCameraFrame(T_rel)
-    R_curr, t_curr = u.T2m(T_align)
-
-
-    # T_rel_est = camera.relativePose().copy()
-    # T_rel_est = np.round(T_rel_est, decimals=2)
-    # R_curr, t_curr = u.T2m(T_rel_est)
-    
-    gt_pose.append(T_curr)
-
-
-    #-------Debug-------
-    print("---------")
-    print("Before the function:")
-    print(f"Absolute pose of the camera:\n {np.round(camera.absolutePose(), decimals=2)}")
-    print(f"Relative pose of the camera:\n {np.round(camera.relativePose(), decimals=2)}")
-    print(f"len of the map: {len(map)}")
-    print(f"len of assoc: {len(assoc)}")
-    print(f"Point curr: {len(points_curr)}")
-    print(f"Point prev: {len(points_prev)}")
-    print(f"R_curr:\n {R_curr} \nt_curr:\n {t_curr}")
-    #-------Debug-------
-
-    #-------Update with new measurements-------
-    map = updateWithNewMeasurements(map, points_prev, points_curr, R_curr, t_curr, assoc, T_i)
-    #-------Update with new measurements-------
-
-    #-------Debug-------
-    print("---------")
-    print("After the function:")
-    print(f"Absolute pose of the camera:\n {np.round(camera.absolutePose(), decimals=2)}")
-    print(f"Relative pose of the camera:\n {np.round(camera.relativePose(), decimals=2)}")
-    print(f"len of the map: {len(map)}")
-    print(f"len of assoc: {len(assoc)}")
-    print(f"Point curr: {len(points_curr)}")
-    print(f"Point prev: {len(points_prev)}")
-    print(f"R_curr:\n {R_curr} \nt_curr:\n {t_curr}")
-    print("---------")
-
-    #-------Debug-------
-
-
-    #-------PICP-------
-    #points_curr are the points in the frame i+1
-    test_picp(camera=camera,
-              solver=solver,
-              map=map,
-              points_frame=points_curr,
-              assoc=assoc,
-              T_rel_gt=T_align,
-              T_abs_gt=T_curr)
-    #-------PICP-------
-
-    #-------Update Map-------
-    map = updateMap(map, points_prev, points_curr, R_curr, t_curr, assoc, T_i)
-    #-------Update Map-------
-
-    
-
 
 def main():
     print("From frame 0 to 1")
@@ -348,15 +201,15 @@ def main():
     data_frame0 = u.extract_measurements(path_frame0)
     data_frame1 = u.extract_measurements(path_frame1)
 
-    p0, p1, points_frame0, points_frame1, assoc = u.data_association(data_frame0, data_frame1)
+    p0, p1, _, points_frame1, assoc = u.data_association(data_frame0, data_frame1)
     
     #----------Complete VO-----------
     #Good rotation and translation is consistent to the movement (forward)
     
-    R, t = u.compute_pose(points_frame0, points_frame1, K=K)
-    R[np.abs(R) < 1e-1] = 0
-    t[np.abs(t) < 1e-1] = 0
-    camera.setCameraPose(u.m2T(R, t))
+    # R, t = u.compute_pose(points_frame0, points_frame1, K=K)
+    # R[np.abs(R) < 1e-1] = 0
+    # t[np.abs(t) < 1e-1] = 0
+    # camera.setCameraPose(u.m2T(R, t))
 
 
     #----------Complete VO-----------
@@ -366,8 +219,8 @@ def main():
     T1_gt = u.g2T(gt[1])  # frame 1 in world frame (w_T_1)
 
     T_rel_gt = u.relativeMotion(T0_gt, T1_gt)
-    #T_rel_gt = u.alignWithCameraFrame(T_rel_gt)
-    #R, t = u.T2m(T_rel_gt)
+    T_rel_gt = u.alignWithCameraFrame(T_rel_gt)
+    R, t = u.T2m(T_rel_gt)
 
     #----------GT-----------
 
@@ -377,28 +230,33 @@ def main():
 
     # Triangulate points w.r.t. frame 0
     map = u.triangulate(R, t, p0, p1, K, assoc)
+    camera.setCameraPose(u.m2T(R, t))
 
-    print(f"T_abs:\n {np.round(u.alignWithWorldFrame(camera.absolutePose()), decimals=2)}")
-    print(f"T_abs_gt:\n {T1_gt}")
-    print(f"T_rel:\n {np.round(u.alignWithWorldFrame(camera.relativePose()), decimals=2)}")
-    print(f"T_rel_gt:\n {T_rel_gt}")
+    T_abs_est = camera.absolutePose().copy()
+    T_abs_est = u.alignWithWorldFrame(T_abs_est)
+    T_abs_est = np.round(T_abs_est, decimals=1)
+    T_abs_est[np.abs(T_abs_est) < 1e-1] = 0
+
+    T1_gt = np.round(T1_gt, decimals=1)
+    T1_gt[np.abs(T1_gt) < 1e-1] = 0
+
+    print(f"[main]T_abs_est:\n {T_abs_est}")
+    print(f"[main]T_abs_gt:\n {T1_gt}")
+
 
     iter = args.iter
-    if(iter > 120): 
+    if(iter > 120):
         iter = 120
-    
     for i in range(1, iter):
-        print(f"From frame {i} to {i+1}")
-        process_frame(i=i, map=map, camera=camera, solver=solver, gt=gt)
-        
-    print(f"Num. of est pose: {len(est_pose)}")
-    print(f"Num. of gt pose: {len(gt_pose)}")
-    
-    if(args.plot):
-        plot(gt_pose, est_pose)
+        #update the pose of the camera from frame i to i+1
+        process_frame(i, map)
 
-    #evaluate(est_pose, gt_pose)
 
-        
+
 if __name__ == '__main__':
     main()
+
+
+
+
+
