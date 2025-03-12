@@ -10,9 +10,9 @@ class Camera():
         prev_T_abs are the homogeneous transformation that express the world in camera frame i. 
         '''
         
-        self.prev_T_abs = np.eye(4)
         self.T_abs = np.eye(4)
         self.T_rel = np.eye(4)
+        self.old_T_abs = np.eye(4)
         
         self.K = K
         
@@ -30,9 +30,12 @@ class Camera():
         return self.T_rel
     
     def updateRelative(self, T_abs_new):
-        'Compute the relative pose given a new absolute pose'
-        inv = np.linalg.inv(self.T_abs)
-        self.T_rel = inv @ T_abs_new
+        inverse = np.linalg.inv(self.old_T_abs)
+        # print(f"[Camera]Inverse:\n {np.round(inverse, 2)}")
+        # print(f"[Camera]T_abs_new:\n {np.round(T_abs_new, 2)}")
+        self.T_rel = inverse @ T_abs_new
+        # print(f"[Camera]T_rel:\n {np.round(self.T_rel, 2)}")
+        self.old_T_abs = T_abs_new
         return self.T_rel
         
     def updatePoseICP(self, dx):
@@ -43,7 +46,7 @@ class Camera():
         'Update the absolute pose with the pose (T_abs=pose)'
         self.T_abs = pose
         self.T_rel = pose
-        self.prev_T_abs = pose
+        self.old_T_abs = pose
     
     def cameraMatrix(self):
         'Return the camera matrix'
