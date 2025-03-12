@@ -281,12 +281,15 @@ def association3d(map, points_frame_curr, camera):
         point_proj, isvalid = camera.project_point(point)
         if(isvalid):
             points_proj.append((id, point_proj))
-    
-    for (elem_proj, elem_curr) in zip(points_proj, points_frame_curr):
+        
+    #print(f"len points proj: {len(points_proj)}")
+    for elem_proj in points_proj:
         id_proj, point_proj = elem_proj
-        id_curr, _ = elem_curr
-        if(id_proj == id_curr):
-            assoc_3d.append((id_proj, id_curr))
+        for elem_curr in points_frame_curr:
+            id_curr, _ = elem_curr
+            if id_proj == id_curr:
+                #print("find association 3D")
+                assoc_3d.append((id_proj, id_curr))
 
     return assoc_3d
 
@@ -467,9 +470,8 @@ def w2C(world_point, camera_pose):
     return p_cam[:3]
 
 def subPoint(map, target_id, new_point):
-    new_point = np.array(new_point, dtype=np.float32)
     for i, (id, point) in enumerate(map):
         if id == target_id:
-            map[i] = (id, new_point)
+            map[i] = tuple((id, new_point))
             return map
     return map

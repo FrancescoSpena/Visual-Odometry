@@ -95,6 +95,7 @@ def evaluate(est_traj, gt_traj):
 def transform_point(p_cam, T):
     p_homog = np.append(p_cam, 1.0)
     p_world_homog = T @ p_homog
+    p_world_homog = np.array(p_world_homog, dtype=np.float32)
     return p_world_homog[:3]
     
 def versus(map, world):
@@ -119,6 +120,7 @@ def test_proj(map, point_curr_frame, camera):
     print("--Start Data for this call--")
     valid = 0
     no_valid = 0
+    total_distance = 0
     for elem in map: 
         id, point = elem
         project_point, isvalid = camera.project_point(point)
@@ -128,14 +130,15 @@ def test_proj(map, point_curr_frame, camera):
             point = u.getPoint(point_curr_frame, str(id))
             if(point is not None):
                 #print(f"ID={id}, measure: {point}, proj: {project_point}")
-                print(f"distance: {np.round(np.linalg.norm(np.array(point) - np.array(project_point)), decimals=1)}")
+                curr_dist = np.round(np.linalg.norm(np.array(point) - np.array(project_point)), decimals=1)
+                total_distance += curr_dist
+                #print(f"distance: {curr_dist}")
         else:
-            print(f"[test_proj]ID={id} No valid projection")
+            #print(f"[test_proj]ID={id} No valid projection")
             no_valid +=1
 
-    print(f"Projections valid: {valid}")
-    print(f"Projections not valid: {no_valid}")
-    print(f"Number of points in the map: {len(map)}")
+    #print(f"Number of points in the map: {len(map)}")
+    print(f"Total error distance: {total_distance}")
     print("--Finish Data for this call--") 
 #------For testing------
     
@@ -154,16 +157,95 @@ def picp(map, points_curr, camera, assoc_3d, i):
     T_abs_gt = u.g2T(gt[i+1])
     T_abs_gt = np.round(T_abs_gt, decimals=1)
     T_abs_gt[np.abs(T_abs_gt) < 1e-1] = 0
+
+    gt_pose.append(T_abs_gt)
+    est_pose.append(T_abs_est)
     
     print(f"[process_frame]T_abs_est:\n {T_abs_est}")
     print(f"[process_frame]T_abs_gt:\n {T_abs_gt}")      
 
 
-def updateMap(map):
-    pass
+def updateMap(map, measurements_prev, measurements_curr, R, t, T_i):
+    id_map = [item[0] for item in map]
+    id_curr = [item[0] for item in measurements_curr]
 
-def retriangulation(map):
-    pass
+    missing = [item for item in id_curr if item not in set(id_map)]
+
+    if(len(missing) != 0):
+        prev_points = []
+        curr_points = []
+        assoc = []
+        for elem in missing:
+            prev = u.getPoint(measurements_prev, elem)
+            curr = u.getPoint(measurements_curr, elem)
+
+            if(prev is not None and curr is not None):
+                prev_points.append(prev)
+                curr_points.append(curr)
+                assoc.append((elem, elem))
+        
+        missing_map = u.triangulate(R, t, prev_points, curr_points, K, assoc)
+
+        if(len(missing_map) != 0):
+            transformed_map = []
+            T_i_inv = np.linalg.inv(T_i)
+
+            for id, point in missing_map:
+                point_global = transform_point(point, T_i_inv)
+                transformed_map.append((id, point_global))
+    
+            map.extend(transformed_map)
+
+            print("[updateMap]All done!")
+    
+    return map
+
+def retriangulation(map, measurements_prev, measurements_curr, R, t, T_i):
+    id_map = [item[0] for item in map]
+    id_curr = [item[0] for item in measurements_curr]
+
+    already_in_map = [item for item in id_curr if item in set(id_map)]
+
+    prev_points = []
+    curr_points = []
+    assoc = []
+
+    if len(already_in_map) != 0:
+        for id in already_in_map:
+            prev = u.getPoint(measurements_prev, str(id))
+            curr = u.getPoint(measurements_curr, str(id))
+
+            if prev is not None and curr is not None:
+                prev_points.append(prev)
+                curr_points.append(curr)
+                assoc.append((id, id))
+        
+        R = np.round(R, decimals=2)
+        t = np.round(t, decimals=2)
+
+        # New points w.r.t. the frame i
+        new_triangulation = u.triangulate(R, t, prev_points, curr_points, K, assoc)
+
+
+        # Transform all points w.r.t global frame 
+        if len(new_triangulation) != 0:
+            transformed_map = []
+            T_i_inv = np.linalg.inv(T_i)
+            for id, point in new_triangulation:
+                point_global = transform_point(point, T_i_inv)
+                #print(f"id: {id} --> point global: {point_global}")
+                transformed_map.append((str(id), point_global))
+
+            for id, point in transformed_map:
+                map = u.subPoint(map, id, point)
+
+            print("[Retriangulation]All done!")
+    else:
+        print("[Retriangulation]No update!")    
+
+    return map
+    
+
 
 def process_frame(i, map):
     print(f"From frame {i} to {i+1}")
@@ -175,22 +257,33 @@ def process_frame(i, map):
 
     _, _, points_prev, points_curr, _ = u.data_association(data_frame_prev, data_frame_curr)
 
-    assoc_3d = u.association3d(map, points_curr, camera)
+
+    T_prev = u.g2T(gt[i])
+    T_curr = u.g2T(gt[i+1])
+
+    T_i = u.alignWithCameraFrame(T_prev.copy())
+    T_i[np.abs(T_i) < 1e-2] = 0
+
+    T_rel = np.linalg.inv(T_prev.copy()) @ T_curr.copy()
+    T_rel = u.alignWithCameraFrame(T_rel)
+    T_rel = np.round(T_rel, decimals=2)
+    R, t = u.T2m(T_rel)
+
 
     #------Retriangulation------
-    map = retriangulation(map)
+    map = retriangulation(map, points_prev, points_curr, R, t, T_i)
     #------Retriangulation------
-    
+
+    #------Update map------
+    map = updateMap(map, points_prev, points_curr, R, t, T_i)
+    #------Update map------
+ 
     #------PICP------
+    assoc_3d = u.association3d(map, points_curr, camera)
     picp(map, points_curr, camera, assoc_3d, i)
     #------PICP------
 
-    #------Update map------
-    map = updateMap(map)
-    #------Update map------
-    
-    
-    #test_proj(map, points_curr, camera)
+    test_proj(map, points_curr, camera)
     
 
 def main():
@@ -251,10 +344,12 @@ def main():
         #update the pose of the camera from frame i to i+1
         process_frame(i, map)
 
-
+    if(args.plot):
+        plot(gt_pose, est_pose)
 
 if __name__ == '__main__':
     main()
+
 
 
 
