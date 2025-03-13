@@ -29,6 +29,7 @@ solver = s.PICP(camera=camera)
 
 gt_pose = []
 est_pose = []
+pose_for_track = []
 points_track = {}
 
 #------For testing------
@@ -132,7 +133,7 @@ def test_proj(map, point_curr_frame, camera):
             point = u.getPoint(point_curr_frame, str(id))
             if(point is not None):
                 #print(f"ID={id}, measure: {point}, proj: {project_point}")
-                curr_dist = np.round(np.linalg.norm(np.array(point) - np.array(project_point)), decimals=1)
+                curr_dist = np.round(np.linalg.norm(np.array(point) - np.array(project_point)), decimals=2)
                 total_distance += curr_dist
                 #print(f"distance: {curr_dist}")
         else:
@@ -147,39 +148,52 @@ def test_proj(map, point_curr_frame, camera):
 #------Multi View------
 def triangulate_n_views(point_tracks, projection_matrices):
     """
-    Triangola un punto 3D da più viste usando il metodo DLT.
+    Triangulate a 3D point from multi view using DLT method
 
     Args:
-        point_tracks (dict): { frame_id: (x, y) } punti 2D osservati in ogni frame
-        projection_matrices (dict): { frame_id: P } matrici di proiezione 3x4 per ogni frame
+        point_tracks (dict): { frame_id: (x, y) } 2D points observed in every frame
+        projection_matrices (dict): { frame_id: P } projection matrix 3x4 for every frame 
 
     Returns:
-        np.array: coordinate 3D del punto ricostruito [X, Y, Z]
+        np.array: 3D coordinates of the reconstructed point [X, Y, Z]
     """
     A = []
 
     for frame_id, (x, y) in point_tracks.items():
+        x, y = float(x), float(y)
+        
         if frame_id not in projection_matrices:
             raise ValueError(f"Frame ID {frame_id} not found in projection_matrices.")
         
-        P = projection_matrices[frame_id]  # Matrice di proiezione 3x4
+        P = projection_matrices[frame_id]  # Projection matrix 3x4
 
-        # Creiamo due equazioni lineari per ogni vista
-        A.append(x * P[2] - P[0])  # Prima equazione
-        A.append(y * P[2] - P[1])  # Seconda equazione
+        A.append(x * P[2] - P[0]) 
+        A.append(y * P[2] - P[1])  
 
-    A = np.array(A)  # Converte in una matrice (2N x 4)
+    A = np.array(A) 
     
-    # Risolviamo il sistema AX = 0 usando SVD
     _, _, V = np.linalg.svd(A)
-    X = V[-1]  # L'ultima riga di V è la soluzione del sistema
+    X = V[-1]  
     
-    # Convertiamo in coordinate cartesiane dividendo per W
     if X[3] == 0:
         raise ValueError("Homogeneous coordinate X[3] is zero. Cannot convert to Cartesian coordinates.")
     
     return X[:3] / X[3]
 
+def extract_measurements_by_id(points_track, id_point):
+    result = {}
+    for frame_id, points in points_track.items():
+        for point_id, coordinates in points:
+            if point_id == id_point:
+                result[frame_id] = coordinates
+    return result
+    
+def add_point_to_frame(points_track, frame_id, point_id, point):
+    if frame_id not in points_track:
+        points_track[frame_id] = []
+        
+    point = np.array(point, dtype=np.float32)
+    points_track[frame_id].append((point_id, point))
 
 #------Multi View------
 
@@ -191,6 +205,8 @@ def picp(map, points_curr, camera, assoc_3d, i):
         camera.updatePoseICP(solver.dx)
     
     T_abs_est = camera.absolutePose().copy()
+    pose_for_track.append(T_abs_est)
+   
     #------Update relative pose------
     T_rel_est = camera.updateRelative(T_abs_est).copy()
     T_rel_est = u.alignWithWorldFrame(T_rel_est)
@@ -231,8 +247,8 @@ def updateMap(map, measurements_prev, measurements_curr, R, t, T_i):
         curr_points = []
         assoc = []
         for elem in missing:
-            prev = u.getPoint(measurements_prev, elem)
-            curr = u.getPoint(measurements_curr, elem)
+            prev = u.getPoint(measurements_prev, str(elem))
+            curr = u.getPoint(measurements_curr, str(elem))
 
             if(prev is not None and curr is not None):
                 prev_points.append(prev)
@@ -300,7 +316,7 @@ def retriangulation(map, measurements_prev, measurements_curr, R, t, T_i):
 
     return map
     
-def retriangulation_n_views(map, est_pose, points_tracks, measurements_curr=None, id_frame=None):
+def retriangulation_n_views(map, est_pose, track, measurements_curr):
     """
     Args:
         map (list): {id, (x, y, z)}: 3D points 
@@ -312,67 +328,40 @@ def retriangulation_n_views(map, est_pose, points_tracks, measurements_curr=None
         map: the updated map with new triangulated points
     """
 
-    # points_track = {
-    #     0: [(1, (5, 10)), (2, (3, 1)), (3, (1, 1))],
-    #     1: [(1, (5, 12)), (2, (3, 2)), (3, (1, 3))]
-    # }
 
-    def extract_measurements_by_id(points_track, target_id):
-        result = {}
-        for frame_id, points in points_track.items():
-            for point_id, coordinates in points:
-                if point_id == target_id:
-                    result[frame_id] = coordinates
-        return result
-    
-    def add_point_to_frame(points_track, frame_id, point_id, point):
-        # Se il frame_id non esiste nel dizionario, crea una nuova lista
-        if frame_id not in points_track:
-            points_track[frame_id] = []
-        
-        # Aggiungi il punto (id, punto) alla lista del frame_id
-        points_track[frame_id].append((point_id, point))
-
-    
     #Reconstruct the projection matrices from the pose and build the dict
     projection_matrices = []
     for pose in est_pose:
         R, t = u.T2m(pose)
+        R = np.round(R, 2)
+        t = np.round(t, 2)
         P_curr = K @ np.hstack((R,t))
         projection_matrices.append(P_curr)
     
     dict_projection_matrices = {}
     for i, proj in enumerate(projection_matrices):
         dict_projection_matrices[i] = proj
-    #Reconstruct the projection matrices from the pose and build the dict
+
 
     #Recover the id of the points to update
     id_map = [item[0] for item in map]
     id_curr = [item[0] for item in measurements_curr]
     already_in_map = [item for item in id_curr if item in set(id_map)]
 
-
     if(len(already_in_map) != 0):
-        #Recover the new measurements of every point
-        curr_points = []
-        for id in already_in_map:
-            curr = u.getPoint(measurements_curr, str(id))
-            curr_points.append((id, curr))
-        
-        #Update with the new measurements the dict
-        for id, point in curr_points:
-            add_point_to_frame(points_tracks, id_frame, id, point)
-
         #Retriangulation of the point with multi view and update the map with the new points
         for id in already_in_map:
-            res = extract_measurements_by_id(points_tracks, id)
-            new_point = triangulate_n_views(res, projection_matrices) 
-            map = u.subPoint(map, id, new_point)  
-
-   
+            res = extract_measurements_by_id(track, str(id))
+            if res:
+                new_point = triangulate_n_views(res, dict_projection_matrices) 
+                if(new_point is not None):
+                    map = u.subPoint(map, id, new_point) 
+            else:
+                print("no point found")
+    
+    print("[Retriangulation]All done!")
     return map
 
-    
 
         
 def process_frame(i, map):
@@ -385,41 +374,46 @@ def process_frame(i, map):
 
     _, _, points_prev, points_curr, _ = u.data_association(data_frame_prev, data_frame_curr)
 
-
     T_prev = u.g2T(gt[i])
     T_curr = u.g2T(gt[i+1])
 
-    T_i = u.alignWithCameraFrame(T_prev.copy())
+    # T_i = u.alignWithCameraFrame(T_prev.copy())
+    # T_i[np.abs(T_i) < 1e-2] = 0
+
+    T_i = camera.absolutePose().copy()
     T_i[np.abs(T_i) < 1e-2] = 0
 
-
-    # T_rel = np.linalg.inv(T_prev.copy()) @ T_curr.copy()
-    # T_rel = u.alignWithCameraFrame(T_rel)
-    # T_rel = np.round(T_rel, decimals=2)
-    # R, t = u.T2m(T_rel)
-
-    T_rel_est = camera.relativePose().copy()
-    T_rel_est = np.round(T_rel_est, 2)
-    T_rel_est[np.abs(T_rel_est) < 1e-2] = 0 
-    R, t = u.T2m(T_rel_est)
-
+    T_rel = np.linalg.inv(T_prev.copy()) @ T_curr.copy()
+    T_rel = u.alignWithCameraFrame(T_rel)
+    #T_rel = np.round(T_rel, decimals=1)
+    R, t = u.T2m(T_rel)
+    
+    # T_rel_est = camera.relativePose().copy()
+    # T_rel_est = np.round(T_rel_est, 2)
+    # T_rel_est[np.abs(T_rel_est) < 1e-2] = 0 
+    # #R, t = u.T2m(T_rel_est)
 
     #------Retriangulation------
     #map = retriangulation(map, points_prev, points_curr, R, t, T_i)
-    #------Retriangulation------
-
-    map = retriangulation_n_views(map=map, est_pose=est_pose, points_tracks=points_track, measurements_curr=points_curr, id_frame=i)
+    map = retriangulation_n_views(map=map, 
+                                  est_pose=pose_for_track, 
+                                  track=points_track, 
+                                  measurements_curr=points_curr)
+    # #------Retriangulation------
 
     #------Update map------
-    #map = updateMap(map, points_prev, points_curr, R, t, T_i)
+    map = updateMap(map, points_prev, points_curr, R, t, T_i)
     #------Update map------
  
     #------PICP------
-    #assoc_3d = u.association3d(map, points_curr, camera)
-    #picp(map, points_curr, camera, assoc_3d, i)
+    assoc_3d = u.association3d(map, points_curr, camera)
+    picp(map, points_curr, camera, assoc_3d, i)
     #------PICP------
 
-    #test_proj(map, points_curr, camera)
+    for id, point in points_curr:
+        add_point_to_frame(points_track=points_track, frame_id=i+1, point_id=id, point=point)
+
+    test_proj(map, points_curr, camera)
     
 
 def main():
@@ -432,6 +426,13 @@ def main():
 
     p0, p1, points_frame0, points_frame1, assoc = u.data_association(data_frame0, data_frame1)
     
+    for id, point in points_frame0:
+        add_point_to_frame(points_track=points_track, frame_id=0, point_id=id, point=point)
+    
+    for id, point in points_frame1:
+        add_point_to_frame(points_track=points_track, frame_id=1, point_id=id, point=point)
+
+
     #----------Complete VO-----------
     #Good rotation and translation is consistent to the movement (forward)
     
@@ -456,12 +457,16 @@ def main():
 
     gt_pose.append(T0_gt)
     gt_pose.append(T1_gt)
-    est_pose.append(T0_gt)
 
     # Triangulate points w.r.t. frame 0
     map = u.triangulate(R, t, p0, p1, K, assoc)
     camera.setCameraPose(u.m2T(R, t))
-    est_pose.append(np.round(camera.absolutePose().copy(), 2))
+    
+    est_pose.append(T0_gt)
+    est_pose.append(T1_gt)
+
+    pose_for_track.append(u.alignWithCameraFrame(T0_gt))
+    pose_for_track.append(u.alignWithCameraFrame(T1_gt))
 
     T_abs_est = camera.absolutePose().copy()
     T_abs_est = u.alignWithWorldFrame(T_abs_est)
@@ -476,9 +481,9 @@ def main():
     T_rel_est = np.round(T_rel_est, decimals=1)
     T_rel_est[np.abs(T_rel_est) < 1e-1] = 0
 
-    # print(f"[main]T_abs_est:\n {T_abs_est}")
-    # print(f"[main]T_abs_gt:\n {T1_gt}")
-    # print(f"[main]T_rel_est:\n {T_rel_est}")
+    print(f"[main]T_abs_est:\n {T_abs_est}")
+    print(f"[main]T_abs_gt:\n {T1_gt}")
+    print(f"[main]T_rel_est:\n {T_rel_est}")
 
 
     iter = args.iter
@@ -493,12 +498,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-
-
-
-
-
-
 
