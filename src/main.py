@@ -59,11 +59,13 @@ def plot(gt_traj, est_traj, map_points=None):
     ax.set_zlabel("Z")
     ax.set_title("Ground Truth vs Estimated Trajectories")
     ax.legend()
+    ax.set_aspect('equal')
     plt.grid(True)
     plt.show()
 
 def evaluate(est_traj, gt_traj):
     assert len(est_traj) == len(gt_traj)
+    ratio = []
     out = 0
     for i in range(len(est_traj)-1):
         Ti_est = est_traj[i]
@@ -86,7 +88,8 @@ def evaluate(est_traj, gt_traj):
         if norm_T != 0:
             tran_error = norm_est_T / norm_T
             tran_error = np.round(tran_error, decimals=2)
-            if(tran_error > 1.5):
+            ratio.append(tran_error)
+            if(tran_error > 5.5):
                 print(f"i: {i} --> tran error: {tran_error} Out of range")
                 out+=1
             else:
@@ -94,13 +97,38 @@ def evaluate(est_traj, gt_traj):
 
     print(f"total poses: {len(est_traj)-1}")
     print(f"out of range: {out}")
+
+    scale_ratio = np.median(ratio)
+    return scale_ratio
+
+def scale_gt_poses(gt_pose, scale_ratio):
+
+    scaled_gt_poses = []
+
+    for pose in gt_pose:
+        scaled_T = pose.copy()
+        scaled_T[:3,3] *= scale_ratio
+        scaled_gt_poses.append(scaled_T)
+    
+    return scaled_gt_poses
  
+def scale_est_poses(est_pose, scale_ratio):
+    scaled_est_poses = []
+
+    for pose in est_pose:
+        scaled_T = pose.copy()
+        scaled_T[:3,3] *= (1/scale_ratio)
+        scaled_est_poses.append(scaled_T)
+    
+    return scaled_est_poses
+
+
 def transform_point(p_cam, T):
     p_homog = np.append(p_cam, 1.0)
     p_world_homog = T @ p_homog
     p_world_homog = np.array(p_world_homog, dtype=np.float32)
     return p_world_homog[:3]
-    
+     
 def versus(map, world):
     out = 0
     for elem in map:
@@ -215,8 +243,8 @@ def picp(map, points_curr, camera, assoc_3d, i):
 
     #------For printing------
     T_abs_est = u.alignWithWorldFrame(T_abs_est)
-    #T_abs_est = np.round(T_abs_est, decimals=1)
-    #T_abs_est[np.abs(T_abs_est) < 1e-2] = 0
+    T_abs_est = np.round(T_abs_est, decimals=1)
+    T_abs_est[np.abs(T_abs_est) < 1e-1] = 0
 
     T_abs_gt = u.g2T(gt[i+1])
     T_abs_gt = np.round(T_abs_gt, decimals=1)
@@ -328,7 +356,6 @@ def retriangulation_n_views(map, est_pose, track, measurements_curr):
         map: the updated map with new triangulated points
     """
 
-
     #Reconstruct the projection matrices from the pose and build the dict
     projection_matrices = []
     for pose in est_pose:
@@ -372,8 +399,7 @@ def process_frame(i, map):
     data_frame_prev = u.extract_measurements(path_frame_prev)
     data_frame_curr = u.extract_measurements(path_frame_curr)
 
-    _, _, points_prev, points_curr, _ = u.data_association(data_frame_prev, data_frame_curr)
-
+    points_prev, points_curr = u.getMeasurementsFromDataFrame(data_frame_prev, data_frame_curr)
 
     T_i = camera.absolutePose().copy()
     T_i[np.abs(T_i) < 1e-1] = 0
@@ -384,7 +410,6 @@ def process_frame(i, map):
     R, t = u.T2m(T_rel_est)
 
     #------Retriangulation------
-    #map = retriangulation(map, points_prev, points_curr, R, t, T_i)
     map = retriangulation_n_views(map=map, 
                                   est_pose=pose_for_track, 
                                   track=points_track, 
@@ -492,8 +517,16 @@ def main():
         #update the pose of the camera from frame i to i+1
         process_frame(i, map)
 
+
+    ratio = evaluate(est_pose, gt_pose)
+    scale_est = scale_est_poses(est_pose=est_pose, scale_ratio=ratio)
+
     if(args.plot):
-        plot(gt_pose, est_pose)
+        plot(gt_pose, scale_est)
+
+
+
+
 
 if __name__ == '__main__':
     main()

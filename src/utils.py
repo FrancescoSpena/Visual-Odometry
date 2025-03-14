@@ -269,8 +269,37 @@ def read_traj(path='../data/trajectory.dat'):
                 gt.append(gt_pose)
     return gt
 
-def getMeasurementsFromDataFrame(second_data):
-    pass
+def getMeasurementsFromDataFrame(first_data, second_data):
+    'Return p0, p1, points_first=(ID, (x, y)), points_second=(ID, (x,y)), assoc=(ID, best)'
+    point_id_first_data = first_data['Point_IDs']
+    actual_id_first_data = first_data['Actual_IDs']
+    coord_x_first = first_data['Image_X']
+    coord_y_first = first_data['Image_Y']
+
+    point_id_second_data = second_data['Point_IDs']
+    actual_id_second_data = second_data['Actual_IDs']
+    coord_x_second = second_data['Image_X']
+    coord_y_second = second_data['Image_Y']
+
+    points_first = []
+    points_second = []
+
+    for i in range(len(point_id_first_data)):
+        act_first = actual_id_first_data[i]
+        for j in range(len(point_id_second_data)):
+            act_second = actual_id_second_data[j]
+
+            if(act_first == act_second):
+                xfirst = coord_x_first[i]
+                yfirst = coord_y_first[i]
+                xsecond = coord_x_second[j]
+                ysecond = coord_y_second[j]
+                points_first.append((act_first, (xfirst, yfirst)))
+                points_second.append((act_second, (xsecond, ysecond)))
+                
+
+    return points_first, points_second
+
 
 def association3d(map, points_frame_curr, camera):
     points_proj = []
