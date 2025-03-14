@@ -57,7 +57,7 @@ def plot(gt_traj, est_traj, map_points=None):
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
     ax.set_zlabel("Z")
-    ax.set_title("Ground Truth vs Estimated Trajectories with Map Points")
+    ax.set_title("Ground Truth vs Estimated Trajectories")
     ax.legend()
     plt.grid(True)
     plt.show()
@@ -137,7 +137,7 @@ def test_proj(map, point_curr_frame, camera):
                 total_distance += curr_dist
                 #print(f"distance: {curr_dist}")
         else:
-            #print(f"[test_proj]ID={id} No valid projection")
+            print(f"[test_proj]ID={id} No valid projection")
             no_valid +=1
 
     #print(f"Number of points in the map: {len(map)}")
@@ -215,8 +215,8 @@ def picp(map, points_curr, camera, assoc_3d, i):
 
     #------For printing------
     T_abs_est = u.alignWithWorldFrame(T_abs_est)
-    T_abs_est = np.round(T_abs_est, decimals=1)
-    T_abs_est[np.abs(T_abs_est) < 1e-1] = 0
+    #T_abs_est = np.round(T_abs_est, decimals=1)
+    #T_abs_est[np.abs(T_abs_est) < 1e-2] = 0
 
     T_abs_gt = u.g2T(gt[i+1])
     T_abs_gt = np.round(T_abs_gt, decimals=1)
@@ -374,24 +374,14 @@ def process_frame(i, map):
 
     _, _, points_prev, points_curr, _ = u.data_association(data_frame_prev, data_frame_curr)
 
-    T_prev = u.g2T(gt[i])
-    T_curr = u.g2T(gt[i+1])
-
-    # T_i = u.alignWithCameraFrame(T_prev.copy())
-    # T_i[np.abs(T_i) < 1e-2] = 0
 
     T_i = camera.absolutePose().copy()
-    T_i[np.abs(T_i) < 1e-2] = 0
+    T_i[np.abs(T_i) < 1e-1] = 0
 
-    T_rel = np.linalg.inv(T_prev.copy()) @ T_curr.copy()
-    T_rel = u.alignWithCameraFrame(T_rel)
-    #T_rel = np.round(T_rel, decimals=1)
-    R, t = u.T2m(T_rel)
-    
-    # T_rel_est = camera.relativePose().copy()
-    # T_rel_est = np.round(T_rel_est, 2)
-    # T_rel_est[np.abs(T_rel_est) < 1e-2] = 0 
-    # #R, t = u.T2m(T_rel_est)
+    T_rel_est = camera.relativePose().copy()
+    T_rel_est = np.round(T_rel_est, 3)
+    T_rel_est[np.abs(T_rel_est) < 1e-1] = 0 
+    R, t = u.T2m(T_rel_est)
 
     #------Retriangulation------
     #map = retriangulation(map, points_prev, points_curr, R, t, T_i)
@@ -413,7 +403,7 @@ def process_frame(i, map):
     for id, point in points_curr:
         add_point_to_frame(points_track=points_track, frame_id=i+1, point_id=id, point=point)
 
-    test_proj(map, points_curr, camera)
+    #test_proj(map, points_curr, camera)
     
 
 def main():
@@ -436,11 +426,13 @@ def main():
     #----------Complete VO-----------
     #Good rotation and translation is consistent to the movement (forward)
     
-    # R, t = u.compute_pose(points_frame0, points_frame1, K=K)
-    # R = np.round(R, decimals=2)
-    # t = np.round(t, decimals=2)
+    R, t = u.compute_pose(points_frame0, points_frame1, K=K)
+    #R = np.round(R, decimals=2)
+    #t = np.round(t, decimals=2)
     # print(f"R:\n {R}")
     # print(f"t:\n {t}")
+    T1_est = u.m2T(R,t)
+    T1_est = np.round(T1_est, 2)
 
 
     #----------Complete VO-----------
@@ -450,8 +442,8 @@ def main():
     T1_gt = u.g2T(gt[1])  # frame 1 in world frame (w_T_1)
 
     T_rel_gt = u.relativeMotion(T0_gt, T1_gt)
-    T_rel_gt = u.alignWithCameraFrame(T_rel_gt)
-    R, t = u.T2m(T_rel_gt)
+    T_rel_gt = np.round(T_rel_gt, 2)
+    #R, t = u.T2m(T_rel_gt)
 
     #----------GT-----------
 
@@ -460,13 +452,19 @@ def main():
 
     # Triangulate points w.r.t. frame 0
     map = u.triangulate(R, t, p0, p1, K, assoc)
-    camera.setCameraPose(u.m2T(R, t))
-    
-    est_pose.append(T0_gt)
-    est_pose.append(T1_gt)
+    camera.setCameraPose(T1_est)
 
-    pose_for_track.append(u.alignWithCameraFrame(T0_gt))
-    pose_for_track.append(u.alignWithCameraFrame(T1_gt))
+    #test_proj(map, points_frame1, camera)
+    
+    #Pose align w.r.t. world frame
+    est_pose.append(T0_gt)
+    est_pose.append(u.alignWithWorldFrame(T1_est))
+
+    #[print(elem) for elem in est_pose]
+
+    #The pose in this list its align w.r.t. camera frame
+    pose_for_track.append(np.eye(4)) 
+    pose_for_track.append(T1_est)
 
     T_abs_est = camera.absolutePose().copy()
     T_abs_est = u.alignWithWorldFrame(T_abs_est)
@@ -484,6 +482,7 @@ def main():
     print(f"[main]T_abs_est:\n {T_abs_est}")
     print(f"[main]T_abs_gt:\n {T1_gt}")
     print(f"[main]T_rel_est:\n {T_rel_est}")
+    print(f"[main]T_rel_gt:\n {T_rel_gt}")
 
 
     iter = args.iter

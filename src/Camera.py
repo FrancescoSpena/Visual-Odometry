@@ -71,7 +71,7 @@ class Camera():
 
         z = p_cam[2]
 
-        if(z <= z_near or z > z_far):
+        if(z <= z_near):
             # print(f"[Camera][project_point]Point out of camera view, z: {z}")
             return None, False
         
