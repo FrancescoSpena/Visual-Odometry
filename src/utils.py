@@ -1,6 +1,7 @@
 import pandas as pd 
 import numpy as np
 import cv2
+from scipy.spatial.distance import cosine
 
 def extract_measurements(file_path):
     point_data = []
@@ -351,6 +352,64 @@ def data_association(first_data, second_data):
                 points_first.append((act_first, (xfirst, yfirst)))
                 points_second.append((act_second, (xsecond, ysecond)))
                 assoc.append((act_first, act_second))
+                
+    p0 = [item[1] for item in points_first]
+    p1 = [item[1] for item in points_second]
+
+    p0 = np.array(p0, dtype=np.float32)
+    p1 = np.array(p1, dtype=np.float32)
+
+    return p0, p1, points_first, points_second, assoc
+
+
+def data_association_with_similarity(first_data, second_data):
+    'Return p0, p1, points_first=(ID, (x, y)), points_second=(ID, (x,y)), assoc=(ID, best)'
+    
+    
+    def compute_similarity(appearance_first, appearance_second):
+        return (1 - cosine(appearance_first, appearance_second))
+    
+    point_id_first_data = first_data['Point_IDs']
+    actual_id_first_data = first_data['Actual_IDs']
+    coord_x_first = first_data['Image_X']
+    coord_y_first = first_data['Image_Y']
+    appearence_first_data = first_data['Appearance_Features']
+
+    point_id_second_data = second_data['Point_IDs']
+    actual_id_second_data = second_data['Actual_IDs']
+    coord_x_second = second_data['Image_X']
+    coord_y_second = second_data['Image_Y']
+    appearence_second_data = second_data['Appearance_Features']
+
+    points_first = []
+    points_second = []
+    assoc = []
+
+    for i in range(len(point_id_first_data)):
+        act_first = actual_id_first_data[i]
+        app_first = appearence_first_data[i]
+        best_match = None
+        best_sim = -1 
+        for j in range(len(point_id_second_data)):
+            act_second = actual_id_second_data[j]
+            app_second = appearence_second_data[j]
+            sim = compute_similarity(app_first, app_second)
+
+            if(sim > best_sim):
+                best_sim = sim 
+                best_match = j
+            
+            if(act_first == act_second):
+                xfirst = coord_x_first[i]
+                yfirst = coord_y_first[i]
+                xsecond = coord_x_second[j]
+                ysecond = coord_y_second[j]
+                points_first.append((act_first, (xfirst, yfirst)))
+                points_second.append((act_second, (xsecond, ysecond)))
+        
+        if(best_match is not None):
+            assoc.append((i,best_match))
+
                 
     p0 = [item[1] for item in points_first]
     p1 = [item[1] for item in points_second]
