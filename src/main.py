@@ -1,4 +1,5 @@
 import utils as u 
+import data_manipulation as data
 import numpy as np
 import Camera as cam
 import PICP_solver as s
@@ -95,11 +96,11 @@ def evaluate(est_traj, gt_traj):
             tran_error = norm_est_T / norm_T
             tran_error = np.round(tran_error, decimals=2)
             ratio.append(tran_error)
-            if(tran_error > 5.5):
-                print(f"i: {i} --> tran error: {tran_error} Out of range")
-                out+=1
-            else:
-                print(f"i: {i} --> tran error: {tran_error}")
+            # if(tran_error > 5.5):
+            #     print(f"i: {i} --> tran error: {tran_error} Out of range")
+            #     out+=1
+            # else:
+            #     print(f"i: {i} --> tran error: {tran_error}")
 
     print(f"total poses: {len(est_traj)-1}")
     print(f"out of range: {out}")
@@ -321,7 +322,7 @@ def updateMap(map, measurements_prev, measurements_curr, R, t, T_i):
                 assoc.append((elem, elem))
         
         #Triangulation of the missing points w.r.t. the prev frame
-        missing_map = u.triangulate(R, t, prev_points, curr_points, K, assoc)
+        missing_map = data.triangulate(R, t, prev_points, curr_points, K, assoc)
 
         #Report the points in the global frame and extend the map
         if(len(missing_map) != 0):
@@ -431,7 +432,7 @@ def process_frame(i, map):
     data_frame_prev = u.extract_measurements(path_frame_prev)
     data_frame_curr = u.extract_measurements(path_frame_curr)
 
-    points_prev, points_curr = u.getMeasurementsFromDataFrame(data_frame_prev, data_frame_curr)
+    points_prev, points_curr = data.getMeasurementsFromDataFrame(data_frame_prev, data_frame_curr)
 
     T_i = camera.absolutePose().copy()
     #T_i[np.abs(T_i) < 1e-1] = 0
@@ -453,7 +454,7 @@ def process_frame(i, map):
     #------Update map------
  
     #------PICP------
-    assoc_3d = u.association3d(map, points_curr, camera)
+    assoc_3d = data.association3d(map, points_curr, camera)
     picp(map, points_curr, camera, assoc_3d, i)
     #------PICP------
 
@@ -471,7 +472,7 @@ def main():
     data_frame0 = u.extract_measurements(path_frame0)
     data_frame1 = u.extract_measurements(path_frame1)
 
-    p0, p1, points_frame0, points_frame1, assoc = u.data_association(data_frame0, data_frame1)
+    p0, p1, points_frame0, points_frame1, assoc = data.data_association(data_frame0, data_frame1)
     
     for id, point in points_frame0:
         add_point_to_frame(points_track=points_track, frame_id=0, point_id=id, point=point)
@@ -483,7 +484,7 @@ def main():
     #----------Complete VO-----------
     #Good rotation and translation is consistent to the movement (forward)
     
-    R, t = u.compute_pose(points_frame0, points_frame1, K=K)
+    R, t = data.compute_pose(points_frame0, points_frame1, K=K)
     #R = np.round(R, decimals=2)
     #t = np.round(t, decimals=2)
     # print(f"R:\n {R}")
@@ -508,7 +509,7 @@ def main():
     gt_pose.append(T1_gt)
 
     # Triangulate points w.r.t. frame 0
-    map = u.triangulate(R, t, p0, p1, K, assoc)
+    map = data.triangulate(R, t, p0, p1, K, assoc)
     camera.setCameraPose(T1_est)
 
     #test_proj(map, points_frame1, camera)
