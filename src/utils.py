@@ -312,3 +312,48 @@ def subPoint(map, target_id, new_point):
             map[i] = tuple((id, new_point))
             return map
     return map
+
+#------Function with appearance------
+def getPoint3DApp(point_frame, target_id):
+    'Return 3D point given the id'
+    'type(target_id) = str'
+    for id, point, _ in point_frame:
+        if(id == target_id):
+            return point
+    return None
+
+def getPointApp(point_frame, target_id):
+    'Return 2D point given the id'
+    'type(target_id) = str'
+    for elem in point_frame:
+        id, point, _ = elem 
+
+        if(id == target_id):
+            point = [float(x) for x in point]
+            point = np.array(point)
+            return point
+    
+    return None
+
+def subPointApp(map, target_id, new_point):
+    'Sub the point with id=target_id with new_point'
+    for i, (id, point, app) in enumerate(map):
+        if id == target_id:
+            map[i] = tuple((id, new_point, app))
+            return map
+    return map
+
+def getBest(assoc, target_id):
+    'Return the best_id given the target in assoc vector'
+    for id, best in assoc:
+        if(id == target_id):
+            return best
+    return None
+
+def getApp(map, target_id):
+    'Return the appearance of the point with id=target_id'
+    for id, _, app in map: 
+        if(id == target_id):
+            return app
+    return None
+#------Function with appearance------

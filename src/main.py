@@ -4,8 +4,7 @@ import numpy as np
 import Camera as cam
 import PICP_solver as s
 import argparse
-import matplotlib.pyplot as plt
-import cv2
+import testing as test
 
 parser = argparse.ArgumentParser(description="Main script Visual Odometry")
 parser.add_argument('--iter', type=int, required=True, help="Number of iterations")
@@ -34,156 +33,7 @@ pose_for_track = []
 points_track = {}
 
 #------For testing------
-def plot(gt_traj, est_traj, map_points=None):
-    """
-    Plot the est and gt poses
-    """
-    est_traj = np.array(est_traj)
-    pos_est = np.array([T[:3, 3] for T in est_traj])
-
-    gt_traj = np.array(gt_traj)
-    pos_gt = np.array([T[:3, 3] for T in gt_traj])
-
-    fig = plt.figure(figsize=(8, 8))
-    ax = fig.add_subplot(111, projection='3d')
-
-    ax.plot(pos_gt[:, 0], pos_gt[:, 1], pos_gt[:, 2],
-            'bo-', markersize=5, label="Ground Truth")
-    ax.plot(pos_est[:, 0], pos_est[:, 1], pos_est[:, 2],
-            'ro-', markersize=5, label="Estimated")
-
-    if map_points is not None:
-        map_xyz = np.array([point[1] for point in map_points])
-
-        ax.scatter(map_xyz[:, 0], map_xyz[:, 1], map_xyz[:, 2],
-                marker='^', color='g', s=50, label="Map Points")
-
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
-    ax.set_zlabel("Z")
-    ax.set_title("Ground Truth vs Estimated Trajectories")
-    ax.legend()
-    ax.set_aspect('equal')
-    plt.grid(True)
-    plt.show()
-
-def evaluate(est_traj, gt_traj):
-    """
-    Compute the rot and tran error of the estimated poses
-    """
-    assert len(est_traj) == len(gt_traj)
-    ratio = []
-    out = 0
-    for i in range(len(est_traj)-1):
-        Ti_est = est_traj[i]
-        Ti1_est = est_traj[i+1]
-        Ti = gt_traj[i]
-        Ti1 = gt_traj[i+1]
-
-        rel_T = np.linalg.inv(Ti) @ Ti1
-        rel_T_est = np.linalg.inv(Ti_est) @ Ti1_est
-
-        error_T = np.linalg.inv(rel_T_est) @ rel_T
-
-        tran_est_T = rel_T_est[:3, 3]
-        tran_T = rel_T[:3, 3]
-        
-        norm_est_T = np.linalg.norm(tran_est_T)
-        norm_T = np.linalg.norm(tran_T)
-
- 
-        if norm_T != 0:
-            tran_error = norm_est_T / norm_T
-            tran_error = np.round(tran_error, decimals=2)
-            ratio.append(tran_error)
-            # if(tran_error > 5.5):
-            #     print(f"i: {i} --> tran error: {tran_error} Out of range")
-            #     out+=1
-            # else:
-            #     print(f"i: {i} --> tran error: {tran_error}")
-
-    print(f"total poses: {len(est_traj)-1}")
-    print(f"out of range: {out}")
-
-    scale_ratio = np.median(ratio)
-    return scale_ratio
-
-def scale_gt_poses(gt_pose, scale_ratio):
-    """
-    Scale the gt poses with the scale_ratio
-    """
-    scaled_gt_poses = []
-
-    for pose in gt_pose:
-        scaled_T = pose.copy()
-        scaled_T[:3,3] *= scale_ratio
-        scaled_gt_poses.append(scaled_T)
     
-    return scaled_gt_poses
- 
-def scale_est_poses(est_pose, scale_ratio):
-    """
-    Scale the estimated poses with the scale_ratio
-    """
-    scaled_est_poses = []
-
-    for pose in est_pose:
-        scaled_T = pose.copy()
-        scaled_T[:3,3] *= (1/scale_ratio)
-        scaled_est_poses.append(scaled_T)
-    
-    return scaled_est_poses
-
-
-def transform_point(p_cam, T):
-    """
-    Transform the point in a different reference frame
-    """
-    p_homog = np.append(p_cam, 1.0)
-    p_world_homog = T @ p_homog
-    p_world_homog = np.array(p_world_homog, dtype=np.float32)
-    return p_world_homog[:3]
-     
-def versus(map, world):
-    """
-    Compare the map with the real map (world)
-    """
-    out = 0
-    for elem in map:
-        id, pos_cam = elem
-
-        pos_cam = transform_point(pos_cam, T_cam)
-        pos_world_gt = world[str(id)]['position']
-
-        if(pos_cam[2] <= 0):
-            out += 1
-
-            
-        print(f"ID={id} --> pos_est: {pos_cam}")
-        print(f"ID={id} --> pos_gt: {pos_world_gt}")
-        print("----")
-        
-    return out
-    
-def test_proj(map, point_curr_frame, camera):
-    print("--Start Data for this call--")
-    total_distance = 0
-    for elem in map: 
-        id, point = elem
-        #Project the 3D point into the image plane
-        project_point, isvalid = camera.project_point(point)
-
-        if isvalid:
-            point = u.getPoint(point_curr_frame, str(id))
-            if(point is not None):
-                #Compute the distance from the projected point and the real measure
-                curr_dist = np.round(np.linalg.norm(np.array(point) - np.array(project_point)), decimals=2)
-                total_distance += curr_dist
-        else:
-            print(f"[test_proj]ID={id} No valid projection")
-
-    print(f"Total error distance: {total_distance}")
-    print("--Finish Data for this call--") 
 #------For testing------
 
 #------Multi View------
@@ -258,10 +108,24 @@ def add_point_to_frame(points_track, frame_id, point_id, point):
 #------Multi View------
 
 def picp(map, points_curr, camera, assoc_3d, i):
+    """
+    Apply P-ICP to align the camera with the curr frame
+
+    Args:
+        map (list): (id, point, app) the triangulated map
+        point_curr (list): (id, point) the measurements of the curr frame (without app)
+        camera (obj.Camera)
+        assoc_3d (list): (id, best) the association between the points in the map and the curr measures
+        i (int): number of the frame
+
+    """
+
+    map_icp = [(id, point) for id, point, _ in map]
+
     #Apply P-ICP to align the camera with the curr frame
     iter_picp = args.picp
     for _ in range(iter_picp):
-        solver.initial_guess(camera, map, points_curr)
+        solver.initial_guess(camera, map_icp, points_curr)
         solver.one_round(assoc_3d)
         camera.updatePoseICP(solver.dx)
     
@@ -299,11 +163,10 @@ def picp(map, points_curr, camera, assoc_3d, i):
     print(f"[process_frame]T_rel_gt:\n {T_rel_gt}")
     #------For printing------  
 
-
-def updateMap(map, measurements_prev, measurements_curr, R, t, T_i):
+def updateMapApp(map, measurements_prev, measurements_curr, R, t, T_i, assoc):
     id_map = [item[0] for item in map]
     id_curr = [item[0] for item in measurements_curr]
-
+    
     #ID of the new no mapped points
     missing = [item for item in id_curr if item not in set(id_map)]
 
@@ -311,27 +174,32 @@ def updateMap(map, measurements_prev, measurements_curr, R, t, T_i):
         #Recover the measure of the prev and curr frame
         prev_points = []
         curr_points = []
-        assoc = []
-        for elem in missing:
-            prev = u.getPoint(measurements_prev, str(elem))
-            curr = u.getPoint(measurements_curr, str(elem))
+        assoc_missing = []
+        app_missing = []
+        for id_missing in missing:
+            prev = u.getPointApp(measurements_prev, str(id_missing))
+            curr = u.getPointApp(measurements_curr, str(id_missing))
+            best = u.getBest(assoc, id_missing)
+            app = u.getApp(map, id_missing)
 
-            if(prev is not None and curr is not None):
+            if(prev is not None and curr is not None and best is not None and app is not None):
                 prev_points.append(prev)
                 curr_points.append(curr)
-                assoc.append((elem, elem))
+                assoc_missing.append((id_missing, best))
+                app_missing.append(app)
+
         
         #Triangulation of the missing points w.r.t. the prev frame
-        missing_map = data.triangulate(R, t, prev_points, curr_points, K, assoc)
+        missing_map = data.triangulateWithApp(R, t, prev_points, curr_points, K, assoc_missing, app_missing)
 
         #Report the points in the global frame and extend the map
         if(len(missing_map) != 0):
             transformed_map = []
             T_i_inv = np.linalg.inv(T_i)
 
-            for id, point in missing_map:
-                point_global = transform_point(point, T_i_inv)
-                transformed_map.append((id, point_global))
+            for id, point, app in missing_map:
+                point_global = test.transform_point(point, T_i_inv)
+                transformed_map.append((id, point_global, app))
     
             map.extend(transformed_map)
 
@@ -361,14 +229,14 @@ def retriangulation(map, measurements_prev, measurements_curr, R, t, T_i):
                 assoc.append((id, id))
         
         # New points w.r.t. the frame i
-        new_triangulation = u.triangulate(R, t, prev_points, curr_points, K, assoc)
+        new_triangulation = data.triangulate(R, t, prev_points, curr_points, K, assoc)
 
         # Transform all points w.r.t global frame 
         if len(new_triangulation) != 0:
             transformed_map = []
             T_i_inv = np.linalg.inv(T_i)
             for id, point in new_triangulation:
-                point_global = transform_point(point, T_i_inv)
+                point_global = test.transform_point(point, T_i_inv)
                 transformed_map.append((str(id), point_global))
 
             for id, point in transformed_map:
@@ -415,7 +283,7 @@ def retriangulation_n_views(map, est_pose, track, measurements_curr):
             if res:
                 new_point = triangulate_n_views(res, dict_projection_matrices) 
                 if(new_point is not None):
-                    map = u.subPoint(map, id, new_point) 
+                    map = u.subPointApp(map, id, new_point) 
             else:
                 print("no point found")
     
@@ -423,7 +291,6 @@ def retriangulation_n_views(map, est_pose, track, measurements_curr):
     return map
 
 
-        
 def process_frame(i, map):
     print(f"From frame {i} to {i+1}")
     path_frame_prev = u.generate_path(i)
@@ -432,14 +299,13 @@ def process_frame(i, map):
     data_frame_prev = u.extract_measurements(path_frame_prev)
     data_frame_curr = u.extract_measurements(path_frame_curr)
 
-    points_prev, points_curr = data.getMeasurementsFromDataFrame(data_frame_prev, data_frame_curr)
+    _, points_curr_app = data.getMeasurementsFromDataFrameApp(data_frame_prev, data_frame_curr)
+
+    points_curr = [(id, point) for id, point, _ in points_curr_app]
 
     T_i = camera.absolutePose().copy()
-    #T_i[np.abs(T_i) < 1e-1] = 0
 
     T_rel_est = camera.relativePose().copy()
-    #T_rel_est = np.round(T_rel_est, 3)
-    #T_rel_est[np.abs(T_rel_est) < 1e-1] = 0 
     R, t = u.T2m(T_rel_est)
 
     #------Retriangulation------
@@ -447,21 +313,21 @@ def process_frame(i, map):
                                   est_pose=pose_for_track, 
                                   track=points_track, 
                                   measurements_curr=points_curr)
-    # #------Retriangulation------
+    #------Retriangulation------
+
+    #------PICP------
+    assoc_3d_app = data.association3d_with_similarity(map, points_curr_app, camera)
+    picp(map, points_curr, camera, assoc_3d_app, i)
+    # #------PICP------
 
     #------Update map------
-    map = updateMap(map, points_prev, points_curr, R, t, T_i)
+    #map = updateMap(map, points_prev_app, points_curr_app, R, t, T_i, assoc_3d_app)
     #------Update map------
- 
-    #------PICP------
-    assoc_3d = data.association3d(map, points_curr, camera)
-    picp(map, points_curr, camera, assoc_3d, i)
-    #------PICP------
 
-    for id, point in points_curr:
-        add_point_to_frame(points_track=points_track, frame_id=i+1, point_id=id, point=point)
+    # for id, point in points_curr:
+    #     add_point_to_frame(points_track=points_track, frame_id=i+1, point_id=id, point=point)
 
-    #test_proj(map, points_curr, camera)
+    test.test_proj(map, points_curr, camera)
     
 
 def main():
@@ -472,8 +338,13 @@ def main():
     data_frame0 = u.extract_measurements(path_frame0)
     data_frame1 = u.extract_measurements(path_frame1)
 
-    p0, p1, points_frame0, points_frame1, assoc = data.data_association(data_frame0, data_frame1)
-    
+    p0, p1, points_frame0_app, points_frame1_app, assoc = data.data_association_with_similarity(data_frame0, data_frame1)
+
+    points_frame0 = [(id, point) for id, point, _ in points_frame0_app]
+    points_frame1 = [(id, point) for id, point, _ in points_frame1_app]
+    app = [(app) for _, _, app in points_frame1_app]
+
+
     for id, point in points_frame0:
         add_point_to_frame(points_track=points_track, frame_id=0, point_id=id, point=point)
     
@@ -485,13 +356,7 @@ def main():
     #Good rotation and translation is consistent to the movement (forward)
     
     R, t = data.compute_pose(points_frame0, points_frame1, K=K)
-    #R = np.round(R, decimals=2)
-    #t = np.round(t, decimals=2)
-    # print(f"R:\n {R}")
-    # print(f"t:\n {t}")
     T1_est = u.m2T(R,t)
-    #T1_est = np.round(T1_est, 2)
-
 
     #----------Complete VO-----------
 
@@ -501,24 +366,18 @@ def main():
 
     T_rel_gt = u.relativeMotion(T0_gt, T1_gt)
     T_rel_gt = np.round(T_rel_gt, 2)
-    #R, t = u.T2m(T_rel_gt)
 
     #----------GT-----------
-
     gt_pose.append(T0_gt)
     gt_pose.append(T1_gt)
 
     # Triangulate points w.r.t. frame 0
-    map = data.triangulate(R, t, p0, p1, K, assoc)
+    map = data.triangulateWithApp(R, t, p0, p1, K, assoc, app)
     camera.setCameraPose(T1_est)
 
-    #test_proj(map, points_frame1, camera)
-    
     #Pose align w.r.t. world frame
     est_pose.append(T0_gt)
     est_pose.append(u.alignWithWorldFrame(T1_est))
-
-    #[print(elem) for elem in est_pose]
 
     #The pose in this list its align w.r.t. camera frame
     pose_for_track.append(np.eye(4)) 
@@ -551,11 +410,11 @@ def main():
         process_frame(i, map)
 
 
-    ratio = evaluate(est_pose, gt_pose)
-    scale_est = scale_est_poses(est_pose=est_pose, scale_ratio=ratio)
+    ratio = test.evaluate(est_pose, gt_pose)
+    scale_est = test.scale_est_poses(est_pose=est_pose, scale_ratio=ratio)
 
     if(args.plot):
-        plot(gt_pose, scale_est)
+        test.plot(gt_pose, scale_est)
 
 
 

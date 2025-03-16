@@ -1,11 +1,10 @@
-import pandas as pd 
 import numpy as np
 import cv2
 from scipy.spatial.distance import cosine
 
 
 def getMeasurementsFromDataFrame(first_data, second_data):
-    'Return p0, p1, points_first=(ID, (x, y)), points_second=(ID, (x,y)), assoc=(ID, best)'
+    'Return p0, p1, points_first=(ID, (x, y)), points_second=(ID, (x,y))'
     point_id_first_data = first_data['Point_IDs']
     actual_id_first_data = first_data['Actual_IDs']
     coord_x_first = first_data['Image_X']
@@ -45,13 +44,11 @@ def association3d(map, points_frame_curr, camera):
         if(isvalid):
             points_proj.append((id, point_proj))
         
-    #print(f"len points proj: {len(points_proj)}")
     for elem_proj in points_proj:
         id_proj, point_proj = elem_proj
         for elem_curr in points_frame_curr:
             id_curr, _ = elem_curr
             if id_proj == id_curr:
-                #print("find association 3D")
                 assoc_3d.append((id_proj, id_curr))
 
     return assoc_3d
@@ -193,11 +190,13 @@ def compute_pose(points1_frame, points2_frame, K):
 
     return best_R, best_t
 
-#------Last part------
+#------Function with appearance------
 def data_association_with_similarity(first_data, second_data):
     'Return p0, p1, points_first=(ID, (x, y), app), points_second=(ID, (x,y), app), assoc=(ID, best)'
     
     def compute_similarity(appearance_first, appearance_second):
+        appearance_first = list(map(float, appearance_first))
+        appearance_second = list(map(float, appearance_second))
         return (1 - cosine(appearance_first, appearance_second))
     
     point_id_first_data = first_data['Point_IDs']
@@ -242,7 +241,7 @@ def data_association_with_similarity(first_data, second_data):
             
         if best_match is not None:
             xfirst, yfirst = coord_x_first[i], coord_y_first[i]
-            points_first.append((act_first, (xfirst, yfirst), app_first[i]))
+            points_first.append((act_first, (xfirst, yfirst), app_first))
             points_second.append((best_match_act, (best_x_second, best_y_second), best_app))
             assoc.append((act_first, best_match))
 
@@ -255,5 +254,112 @@ def data_association_with_similarity(first_data, second_data):
 
     return p0, p1, points_first, points_second, assoc
 
+def getMeasurementsFromDataFrameApp(first_data, second_data):
+    'Return p0, p1, points_first=(ID, (x, y), app), points_second=(ID, (x,y), app)'
+    point_id_first_data = first_data['Point_IDs']
+    actual_id_first_data = first_data['Actual_IDs']
+    coord_x_first = first_data['Image_X']
+    coord_y_first = first_data['Image_Y']
+    appearence_first_data = first_data['Appearance_Features']
 
-#------Last part------
+
+    point_id_second_data = second_data['Point_IDs']
+    actual_id_second_data = second_data['Actual_IDs']
+    coord_x_second = second_data['Image_X']
+    coord_y_second = second_data['Image_Y']
+    appearence_second_data = second_data['Appearance_Features']
+
+
+    points_first = []
+    points_second = []
+
+    for i in range(len(point_id_first_data)):
+        act_first = actual_id_first_data[i]
+        for j in range(len(point_id_second_data)):
+            act_second = actual_id_second_data[j]
+
+            if(act_first == act_second):
+                xfirst = coord_x_first[i]
+                yfirst = coord_y_first[i]
+                xsecond = coord_x_second[j]
+                ysecond = coord_y_second[j]
+                app_first = appearence_first_data[i]
+                app_second = appearence_second_data[j]
+                points_first.append((act_first, (xfirst, yfirst), app_first))
+                points_second.append((act_second, (xsecond, ysecond), app_second))
+                
+
+    return points_first, points_second
+
+def triangulateWithApp(R, t, points1, points2, K, assoc, app):
+    'Return a list of 3d points (ID, (X, Y, Z))'
+    'assoc = (ID, best_ID)'
+
+    assert len(points1) == len(points2) == len(assoc) == len(app)
+
+    P1 = K @ np.hstack((np.eye(3), np.zeros((3, 1))))
+    P2 = K @ np.hstack((R, t))
+
+    points1 = np.array(points1).reshape(-1, 2).T  # (2, N)
+    points2 = np.array(points2).reshape(-1, 2).T  # (2, N)
+
+    points4D = cv2.triangulatePoints(P1, P2, points1, points2)
+
+    points4D /= points4D[3]    # x /= w
+    points3D = points4D[:3].T  # (N x 3)
+
+    id_points3D = []
+    ids = [pair[0] for pair in assoc]
+    for i, point in enumerate(points3D):
+        id_points3D.append((ids[i], point, app[i]))
+
+    return id_points3D
+
+def association3d_with_similarity(map_points, points_frame_curr, camera):
+    """
+    Return the association vector between the map and the measure of the curr frame
+
+    Args:
+        map_points (list): (id, point, app) the map that contains the 3D points 
+        points_frame_curr (list): (id, point, app) the measurements of the curr frame
+        camera (obj.Camera): the camera object
+
+    Return: 
+        association vector
+    """
+    def compute_similarity(appearance_first, appearance_second):
+        appearance_first = list(map(float, appearance_first))
+        appearance_second = list(map(float, appearance_second))
+        return (1 - cosine(appearance_first, appearance_second))
+    
+    points_proj = []
+    assoc3d_app = []
+    
+    #Project the map into the image plane
+    for elem in map_points: 
+        id, point, app = elem 
+        proj, isvalid = camera.project_point(point)
+        if(isvalid):
+            points_proj.append((id, proj, app))
+    
+    for elem in points_proj:
+        id, point, app = elem 
+
+        best_match = None 
+        best_sim = -1
+
+        for id_curr, point_curr, app_curr in points_frame_curr:
+            sim = compute_similarity(app, app_curr)
+
+            if(sim > best_sim):
+                best_sim = sim 
+                best_match = id_curr
+        
+        if best_match is not None:
+            assoc3d_app.append((id, best_match))
+
+    return assoc3d_app
+
+
+
+#------Function with appearance------
