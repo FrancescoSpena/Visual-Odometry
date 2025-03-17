@@ -338,9 +338,8 @@ def getPointApp(point_frame, target_id):
 def subPointApp(map, target_id, new_point):
     'Sub the point with id=target_id with new_point'
     for i, (id, point, app) in enumerate(map):
-        if id == target_id:
-            map[i] = tuple((id, new_point, app))
-            return map
+        if(id == target_id):
+            map[i] = (id, new_point, app)
     return map
 
 def getBest(assoc, target_id):
@@ -350,10 +349,28 @@ def getBest(assoc, target_id):
             return best
     return None
 
-def getApp(map, target_id):
-    'Return the appearance of the point with id=target_id'
-    for id, _, app in map: 
-        if(id == target_id):
-            return app
+def getId(assoc, targed_best_id):
+    for id, best in assoc:
+        if best == targed_best_id:
+            return id
     return None
+
+def getApp(measurements, target_id):
+    """
+    Return the appearance of the point with id=target_di
+
+    Args:
+        measurements (list): (id, point, app) 
+        target_id (str): target id of the point
+    Return: 
+        app (list)
+    """
+
+    for id, point, app in measurements:
+        if(id == target_id):
+            return app 
+    
+    return None
+
+
 #------Function with appearance------

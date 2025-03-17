@@ -203,13 +203,13 @@ def data_association_with_similarity(first_data, second_data):
     actual_id_first_data = first_data['Actual_IDs']
     coord_x_first = first_data['Image_X']
     coord_y_first = first_data['Image_Y']
-    appearence_first_data = first_data['Appearance_Features']
+    appearance_first_data = first_data['Appearance_Features']
 
     point_id_second_data = second_data['Point_IDs']
     actual_id_second_data = second_data['Actual_IDs']
     coord_x_second = second_data['Image_X']
     coord_y_second = second_data['Image_Y']
-    appearence_second_data = second_data['Appearance_Features']
+    appearance_second_data = second_data['Appearance_Features']
 
     points_first = []
     points_second = []
@@ -217,7 +217,7 @@ def data_association_with_similarity(first_data, second_data):
 
     for i in range(len(point_id_first_data)):
         act_first = actual_id_first_data[i]
-        app_first = appearence_first_data[i]
+        app_first = appearance_first_data[i]
         
         best_match = None
         best_match_act = None
@@ -228,7 +228,7 @@ def data_association_with_similarity(first_data, second_data):
         
         for j in range(len(point_id_second_data)):
             act_second = actual_id_second_data[j]
-            app_second = appearence_second_data[j]
+            app_second = appearance_second_data[j]
             sim = compute_similarity(app_first, app_second)
 
             if(sim > best_sim):
@@ -291,11 +291,27 @@ def getMeasurementsFromDataFrameApp(first_data, second_data):
 
     return points_first, points_second
 
-def triangulateWithApp(R, t, points1, points2, K, assoc, app):
-    'Return a list of 3d points (ID, (X, Y, Z))'
+def triangulateWithApp(R, t, points1, points2, K, assoc, app_curr_frame):
+    """
+    Triangulate 3D points 
+
+    Args:
+        R (matrix 3x3): Rotation matrix from frame prev to curr
+        t (matrix 3x1): traslation vector from frame prev to curr
+        points1 (list): measurements of the prev frame
+        points2 (list): measurements of the curr frame 
+        K (matrix 3x3): camera matrix 
+        assoc (list): (id, best_id) association between measurements of the prev and curr frame
+        app_curr_frame (list): appearance of the curr frame
+    
+    Return: 
+        map (list): list of triangulated 3D points
+    """
+    
+    'Return a list of 3d points (ID, (X, Y, Z), app)'
     'assoc = (ID, best_ID)'
 
-    assert len(points1) == len(points2) == len(assoc) == len(app)
+    assert len(points1) == len(points2) == len(assoc) == len(app_curr_frame)
 
     P1 = K @ np.hstack((np.eye(3), np.zeros((3, 1))))
     P2 = K @ np.hstack((R, t))
@@ -311,7 +327,7 @@ def triangulateWithApp(R, t, points1, points2, K, assoc, app):
     id_points3D = []
     ids = [pair[0] for pair in assoc]
     for i, point in enumerate(points3D):
-        id_points3D.append((ids[i], point, app[i]))
+        id_points3D.append((ids[i], point, app_curr_frame[i]))
 
     return id_points3D
 
@@ -333,32 +349,29 @@ def association3d_with_similarity(map_points, points_frame_curr, camera):
         return (1 - cosine(appearance_first, appearance_second))
     
     points_proj = []
-    assoc3d_app = []
+    assoc3d_app = {}
     
-    #Project the map into the image plane
-    for elem in map_points: 
-        id, point, app = elem 
+    for id, point, app in map_points: 
         proj, isvalid = camera.project_point(point)
-        if(isvalid):
+        if isvalid:
             points_proj.append((id, proj, app))
-    
-    for elem in points_proj:
-        id, point, app = elem 
 
-        best_match = None 
-        best_sim = -1
+    for id, point, app in points_proj:
+        best_match = None
+        best_sim = -1  
 
         for id_curr, point_curr, app_curr in points_frame_curr:
             sim = compute_similarity(app, app_curr)
 
-            if(sim > best_sim):
-                best_sim = sim 
+            if sim > best_sim:
+                best_sim = sim
                 best_match = id_curr
         
         if best_match is not None:
-            assoc3d_app.append((id, best_match))
+            if best_match not in assoc3d_app or assoc3d_app[best_match][1] < best_sim:
+                assoc3d_app[best_match] = (id, best_sim)
 
-    return assoc3d_app
+    return [(id, best) for best, (id, _) in assoc3d_app.items()]
 
 
 
