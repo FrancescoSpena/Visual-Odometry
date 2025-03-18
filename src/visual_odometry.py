@@ -180,10 +180,12 @@ def updateMapApp(map, measurements_prev, measurements_curr, R, t, T_i, assoc):
 
     """
 
+    assert len(measurements_prev) == len(measurements_curr) == len(assoc) != 0
+
     id_map = [item[0] for item in map]
     id_curr = [item[0] for item in measurements_curr]
 
-    #ID of the new no-mapped points
+    #ID of the new no-mapped points in the curr frame
     missing = [item for item in id_curr if item not in set(id_map)]
 
     if(len(missing) != 0):
@@ -193,19 +195,24 @@ def updateMapApp(map, measurements_prev, measurements_curr, R, t, T_i, assoc):
         app_missing = []
 
         for id_miss in missing:
-            prev = u.getPointApp(measurements_prev, str(id_miss))
-            curr = u.getPointApp(measurements_curr, str(id_miss))
-            app = u.getApp(measurements_curr, str(id_miss))
             id = u.getId(assoc, str(id_miss))
 
-            
-            if(prev is not None and curr is not None and app is not None and id is not None):
-                prev_points.append(prev)
-                curr_points.append(curr)
-                app_missing.append(app)
-                assoc_missing.append((id, id_miss))
+            if(id is not None):
+                prev = u.getPointApp(measurements_prev, str(id))
+                curr = u.getPointApp(measurements_curr, str(id_miss))
+                app = u.getApp(measurements_curr, str(id_miss))
 
-            
+                if(prev is not None and curr is not None and app is not None):
+                    prev_points.append(prev)
+                    curr_points.append(curr)
+                    app_missing.append(app)
+                    assoc_missing.append((id, id_miss))
+
+
+        prev_points = np.array(prev_points, dtype=np.float32)
+        curr_points = np.array(curr_points, dtype=np.float32)
+        
+        #3D points w.r.t. the prev frame  
         missing_map = data.triangulateWithApp(R=R, t=t, points1=prev_points, 
                                               points2=curr_points, K=K, assoc=assoc_missing,
                                               app_curr_frame=app_missing)
@@ -263,7 +270,7 @@ def retriangulation_n_views_app(map, est_pose, track, measurements_curr):
                 if(new_point is not None):
                     map = u.subPointApp(map, id, new_point) 
             else:
-                print("no point found")
+                print(f"No point with id:{id} found")
     
     print("[Retriangulation]All done!")
     return map
@@ -279,24 +286,29 @@ def data_association_frame(points_prev, points_curr):
     """
 
     assoc = []
+    assigned_curr_ids = set() 
 
     def compute_similarity(appearance_first, appearance_second):
         appearance_first = list(map(float, appearance_first))
         appearance_second = list(map(float, appearance_second))
         return 1 - cosine(appearance_first, appearance_second)
-    
+
     for id, _, app in points_prev:
         best_sim = -1
         best_id = None
 
-        for id_curr, _, app_curr in points_curr:  
+        for id_curr, _, app_curr in points_curr:
+            if id_curr in assigned_curr_ids:  
+                continue  
+
             sim = compute_similarity(app, app_curr)
 
             if sim > best_sim:
-                best_sim = sim 
+                best_sim = sim
                 best_id = id_curr
-            
-        if best_id is not None: 
+
+        if best_id is not None:
             assoc.append((id, best_id))
+            assigned_curr_ids.add(best_id)  
 
     return assoc

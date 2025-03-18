@@ -90,7 +90,6 @@ def picp(map, points_curr, camera, assoc_3d, i):
     print(f"[process_frame]T_rel_gt:\n {T_rel_gt}")
     #------For printing------  
 
-
 def picp_app(map, points_curr, camera, assoc_3d, i):
     """
     Apply P-ICP to align the camera with the curr frame
@@ -103,7 +102,6 @@ def picp_app(map, points_curr, camera, assoc_3d, i):
         i (int): number of the frame
     Return:
         None
-
     """
 
     map_no_app = [(id, point) for id, point, _ in map]
@@ -148,6 +146,7 @@ def picp_app(map, points_curr, camera, assoc_3d, i):
     print(f"[process_frame]T_rel_est:\n {T_rel_est}")
     print(f"[process_frame]T_rel_gt:\n {T_rel_gt}")
     #------For printing------  
+
 def process_data_for_frame(i, map, data_frame_prev, data_frame_curr):
     points_prev, points_curr = data.getMeasurementsFromDataFrame(data_frame_prev, data_frame_curr)
 
@@ -176,41 +175,40 @@ def process_data_for_frame(i, map, data_frame_prev, data_frame_curr):
     for id, point in points_curr:
         vo.add_point_to_frame(points_track=points_track, frame_id=i+1, point_id=id, point=point)
 
+#------Functions with appearance------
 
 def process_data_for_frame_app(i, map, data_frame_prev, data_frame_curr):
-    points_prev_app, points_curr_app = data.getMeasurementsFromDataFrameApp(data_frame_prev, data_frame_curr)
+    _, _, points_prev_app, points_curr_app, assoc2d = data.data_association_with_similarity(data_frame_prev, data_frame_curr)
 
     points_curr = [(id, point) for id, point, _ in points_curr_app]
     
     T_i = camera.absolutePose().copy()
-
     T_rel_est = camera.relativePose().copy()
     R, t = u.T2m(T_rel_est)
 
     #------Retriangulation------
     map = vo.retriangulation_n_views_app(map=map, 
-                                  est_pose=pose_for_track, 
-                                  track=points_track, 
-                                  measurements_curr=points_curr)
+                                         est_pose=pose_for_track, 
+                                         track=points_track, 
+                                         measurements_curr=points_curr)
     #------Retriangulation------
 
     #------Update map------
-    assoc_for_update = vo.data_association_frame(points_prev_app, points_curr_app)
-    map = vo.updateMapApp(map, points_prev_app, points_curr_app, R, t, T_i, assoc_for_update)
+    map = vo.updateMapApp(map, points_prev_app, points_curr_app, R, t, T_i=T_i, assoc=assoc2d)
     #------Update map------
 
-    #------PICP------
+    # #------PICP------
     assoc_3d = data.association3d_with_similarity(map, points_curr_app, camera)
     picp_app(map, points_curr, camera, assoc_3d, i)
     #------PICP------
 
     for id, point in points_curr:
         vo.add_point_to_frame(points_track=points_track, frame_id=i+1, point_id=id, point=point)
+
     
 
-
 def process_frame(i, map):
-    print(f"From frame {i} to {i+1}")
+    print(f"From frame {i} to {i+1} (total iter: {args.iter})")
     path_frame_prev = u.generate_path(i)
     path_frame_curr = u.generate_path(i+1)
 
@@ -264,6 +262,7 @@ def main():
 
     # Triangulate points w.r.t. frame 0
     map = data.triangulateWithApp(R, t, p0, p1, K, assoc, app_curr_frame=app)
+    #map = data.triangulate(R, t, p0, p1, K, assoc)
     camera.setCameraPose(T1_est)
 
     #Pose align w.r.t. world frame
@@ -301,11 +300,11 @@ def main():
         process_frame(i, map)
 
 
-    ratio = test.evaluate(est_pose, gt_pose)
-    scale_est = test.scale_est_poses(est_pose=est_pose, scale_ratio=ratio)
+    #ratio = test.evaluate(est_pose, gt_pose)
+    #scale_est = test.scale_est_poses(est_pose=est_pose, scale_ratio=ratio)
 
     if(args.plot):
-        test.plot(gt_pose, scale_est)
+        test.plot(gt_pose, est_pose)
 
 
 

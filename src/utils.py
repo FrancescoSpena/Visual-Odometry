@@ -349,9 +349,9 @@ def getBest(assoc, target_id):
             return best
     return None
 
-def getId(assoc, targed_best_id):
+def getId(assoc, target_best_id):
     for id, best in assoc:
-        if best == targed_best_id:
+        if best == target_best_id:
             return id
     return None
 
