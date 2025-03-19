@@ -2,9 +2,16 @@ import numpy as np
 import cv2
 from scipy.spatial.distance import cosine
 
-
+#------Function without appearance------
 def getMeasurementsFromDataFrame(first_data, second_data):
-    'Return p0, p1, points_first=(ID, (x, y)), points_second=(ID, (x,y))'
+    """
+    Return p0, p1, points_first=(ID, (x, y)), points_second=(ID, (x,y))
+    Args:
+        first_data (dict): dictionary of the prev frame
+        second_data (dict): dictionary of the curr frame
+    Return:
+        p0, p1, points_first, points_second, (np.array), (np.array), (list), (list)
+    """
     point_id_first_data = first_data['Point_IDs']
     actual_id_first_data = first_data['Actual_IDs']
     coord_x_first = first_data['Image_X']
@@ -35,6 +42,15 @@ def getMeasurementsFromDataFrame(first_data, second_data):
     return points_first, points_second
 
 def association3d(map, points_frame_curr, camera):
+    """
+    Return the associations vector between the map and the measurements of the curr frame (gt)
+    Args:
+        map (list): (id, (x,y,z))
+        points_frame_curr (list): (id, (x,y))
+        camera (obj.Camera): camera
+    Return:
+        assoc_3d (list): (id, best)
+    """
     points_proj = []
     assoc_3d = []
 
@@ -54,7 +70,14 @@ def association3d(map, points_frame_curr, camera):
     return assoc_3d
 
 def data_association(first_data, second_data):
-    'Return p0, p1, points_first=(ID, (x, y)), points_second=(ID, (x,y)), assoc=(ID, best)'
+    """
+    Data association between two consegutive frames (gt)
+    Args:
+        first_data (dict): dictionary of the prev frame
+        second_data (dict): dictionary of the curr frame
+    Return:
+        p0, p1, points_first, points_second, assoc (np.array), (np.array), (list), (list), (list)
+    """
     point_id_first_data = first_data['Point_IDs']
     actual_id_first_data = first_data['Actual_IDs']
     coord_x_first = first_data['Image_X']
@@ -92,8 +115,18 @@ def data_association(first_data, second_data):
     return p0, p1, points_first, points_second, assoc
 
 def triangulate(R, t, points1, points2, K, assoc):
-    'Return a list of 3d points (ID, (X, Y, Z))'
-    'assoc = (ID, best_ID)'
+    """
+    Triangulate 3D points from two consegutive frames
+    Args:
+        R (3x3): rotation matrix from prev to curr frame
+        t (3x1): translation vector from prev to curr frame 
+        points1 (np.array): measurements of the prev frame
+        points2 (np.array): measurements of the curr frame
+        K (3x3): camera matrix 
+        assoc (list): (id, best_id)
+    Return:
+        map (list): (id, (x,y,z)) triangulated map
+    """
 
     assert len(points1) == len(points2) == len(assoc)
 
@@ -123,6 +156,13 @@ def triangulate(R, t, points1, points2, K, assoc):
     return id_points3D
 
 def check_essential(E):
+    """
+    Check if the essential matrix its valid
+    Args:
+        E (3x3): essential matrix
+    Return: 
+        res (dict): dictionary with determinant and singular values
+    """
     U, S, Vt = np.linalg.svd(E)
 
     rank_valid = np.isclose(S[2], 0, atol=1e-6) and np.isclose(S[0], S[1], atol=1e-3)
@@ -131,7 +171,16 @@ def check_essential(E):
     return rank_valid and det_valid, {"singular_values": S, "determinant": np.linalg.det(E)}
 
 def compute_pose(points1_frame, points2_frame, K):
-    'Compute E -> Pose'
+    """
+    Compute the pose of the camera in the first two frames
+    Args:
+        points1_frame (list): (id, (x,y)) measurements of the frame 0 
+        points2_frame (list): (id, (x,y)) measurements of the frame 1
+        K (3x3): camera matrix
+    Return:
+        R (3x3): rotation matrix 
+        t (3x1): translation vector
+    """
 
     if not points1_frame or not points2_frame:
         raise ValueError("Input points cannot be empty")
@@ -190,10 +239,19 @@ def compute_pose(points1_frame, points2_frame, K):
 
     return best_R, best_t
 
+#------Function without appearance------
+
 #------Function with appearance------
 def data_association_with_similarity(first_data, second_data):
-    'Return p0, p1, points_first=(ID, (x, y), app), points_second=(ID, (x,y), app), assoc=(ID, best)'
-    
+    """
+    Data association between two consegutive frames througt appearance
+    Args:
+        first_data (dict): dictionary of the prev frame
+        second_data (dict): dictionary of the curr frame
+    Return:
+        p0, p1, points_first, points_second, assoc (np.array), (np.array), (list), (list), (list)
+    """
+
     def compute_similarity(appearance_first, appearance_second):
         appearance_first = list(map(float, appearance_first))
         appearance_second = list(map(float, appearance_second))

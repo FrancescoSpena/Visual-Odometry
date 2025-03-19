@@ -4,8 +4,11 @@ import data_manipulation as data
 import testing as test
 from scipy.spatial.distance import cosine
 
+#Camera info and camera matrix
 camera_info = u.extract_camera_data()
 K = camera_info['camera_matrix']
+
+#------Data association without appearance------
 
 def retriangulation_n_views(map, est_pose, track, measurements_curr):
     """
@@ -121,6 +124,19 @@ def add_point_to_frame(points_track, frame_id, point_id, point):
     points_track[frame_id].append((point_id, point))
 
 def updateMap(map, measurements_prev, measurements_curr, R, t, T_i):
+    """
+    Update the map (without appearance)
+    Args:
+        map (list): (id, (x,y,z))
+        measurements_prev (list): (id, (x,y))
+        measurements_curr (list): (id, (x,y))
+        R (3x3): rotation matrix from prev to curr frame
+        t (3x1): translation vector from prev to curr frame
+        T_i (4x4): homogeneous transformation thar represent the absolute pose of the camera
+    Return:
+        map (list): (id, (x,y,z))
+    """
+
     id_map = [item[0] for item in map]
     id_curr = [item[0] for item in measurements_curr]
 
@@ -159,9 +175,9 @@ def updateMap(map, measurements_prev, measurements_curr, R, t, T_i):
     
     return map
 
+#------Data association without appearance------
 
 #------Data association with appearance------
-
 
 def updateMapApp(map, measurements_prev, measurements_curr, R, t, T_i, assoc):
     """
@@ -286,7 +302,6 @@ def retriangulation_n_views_app(map, est_pose, track, measurements_curr):
     print("[Retriangulation]All done!")
     return map
 
-
 def data_association_frame(points_prev, points_curr):
     """
     Args:
@@ -323,3 +338,5 @@ def data_association_frame(points_prev, points_curr):
             assigned_curr_ids.add(best_id)  
 
     return assoc
+
+#------Data association with appearance------

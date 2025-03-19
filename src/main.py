@@ -90,6 +90,68 @@ def picp(map, points_curr, camera, assoc_3d, i):
     print(f"[process_frame]T_rel_gt:\n {T_rel_gt}")
     #------For printing------  
 
+def process_data_for_frame(i, map, data_frame_prev, data_frame_curr):
+    points_prev, points_curr = data.getMeasurementsFromDataFrame(data_frame_prev, data_frame_curr)
+
+    T_i = camera.absolutePose().copy()
+
+    T_rel_est = camera.relativePose().copy()
+    R, t = u.T2m(T_rel_est)
+
+    #------Retriangulation------
+    map = vo.retriangulation_n_views(map=map, 
+                                  est_pose=pose_for_track, 
+                                  track=points_track, 
+                                  measurements_curr=points_curr)
+    #------Retriangulation------
+
+    #------Update map------
+    map = vo.updateMap(map, points_prev, points_curr, R, t, T_i)
+    #------Update map------
+
+    #------PICP------
+    assoc_3d = data.association3d(map, points_curr, camera)
+    picp(map, points_curr, camera, assoc_3d, i)
+    #------PICP------
+
+
+    for id, point in points_curr:
+        vo.add_point_to_frame(points_track=points_track, frame_id=i+1, point_id=id, point=point)
+
+#------Functions with appearance------
+
+def process_data_for_frame_app(i, map, data_frame_prev, data_frame_curr):
+    #Prev measurements, Curr measurements and associations 
+    _, _, points_prev_app, points_curr_app, assoc2d = data.data_association_with_similarity(data_frame_prev, data_frame_curr)
+
+    points_curr = [(id, point) for id, point, _ in points_curr_app]
+    
+    #Absolute Pose of the camera
+    T_i = camera.absolutePose().copy()
+    #Relative Pose of the camera
+    T_rel_est = camera.relativePose().copy()
+    R, t = u.T2m(T_rel_est)
+
+    #------Retriangulation------
+    map = vo.retriangulation_n_views_app(map=map, 
+                                         est_pose=pose_for_track, 
+                                         track=points_track, 
+                                         measurements_curr=points_curr)
+    #------Retriangulation------
+
+    #------Update map------
+    map = vo.updateMapApp(map, points_prev_app, points_curr_app, R, t, T_i=T_i, assoc=assoc2d)
+    #------Update map------
+
+    #------PICP------
+    assoc_3d = data.association3d_with_similarity(map, points_curr_app, camera)
+    picp_app(map, points_curr, camera, assoc_3d, i)
+    #------PICP------
+
+    #Add points to dict to apply multi-views retriangulation 
+    for id, point in points_curr:
+        vo.add_point_to_frame(points_track=points_track, frame_id=i+1, point_id=id, point=point)
+
 def picp_app(map, points_curr, camera, assoc_3d, i):
     """
     Apply P-ICP to align the camera with the curr frame
@@ -147,100 +209,34 @@ def picp_app(map, points_curr, camera, assoc_3d, i):
     # print(f"[process_frame]T_rel_gt:\n {T_rel_gt}")
     # #------For printing------  
 
-def process_data_for_frame(i, map, data_frame_prev, data_frame_curr):
-    points_prev, points_curr = data.getMeasurementsFromDataFrame(data_frame_prev, data_frame_curr)
-
-    T_i = camera.absolutePose().copy()
-
-    T_rel_est = camera.relativePose().copy()
-    R, t = u.T2m(T_rel_est)
-
-    #------Retriangulation------
-    map = vo.retriangulation_n_views(map=map, 
-                                  est_pose=pose_for_track, 
-                                  track=points_track, 
-                                  measurements_curr=points_curr)
-    #------Retriangulation------
-
-    #------Update map------
-    map = vo.updateMap(map, points_prev, points_curr, R, t, T_i)
-    #------Update map------
-
-    #------PICP------
-    assoc_3d = data.association3d(map, points_curr, camera)
-    picp(map, points_curr, camera, assoc_3d, i)
-    #------PICP------
-
-
-    for id, point in points_curr:
-        vo.add_point_to_frame(points_track=points_track, frame_id=i+1, point_id=id, point=point)
-
 #------Functions with appearance------
 
-def process_data_for_frame_app(i, map, data_frame_prev, data_frame_curr):
-    _, _, points_prev_app, points_curr_app, assoc2d = data.data_association_with_similarity(data_frame_prev, data_frame_curr)
-
-    points_curr = [(id, point) for id, point, _ in points_curr_app]
-    
-    id_prev = [id for id, _, _ in points_prev_app]
-    id_curr = [id for id, _, _ in points_curr_app]
-    
-    # from collections import Counter
-    
-    # count_dict = Counter(id_prev)
-    # duplicates = {key: value for key, value in count_dict.items() if value > 1}
-    # print("[Prev]Duplicates and their counts:", duplicates)
-
-    # count_dict = Counter(id_curr)
-    # duplicates = {key: value for key, value in count_dict.items() if value > 1}
-    # print("[Curr]Duplicates and their counts:", duplicates)
-
-    
-    T_i = camera.absolutePose().copy()
-    T_rel_est = camera.relativePose().copy()
-    R, t = u.T2m(T_rel_est)
-
-    #------Retriangulation------
-    map = vo.retriangulation_n_views_app(map=map, 
-                                         est_pose=pose_for_track, 
-                                         track=points_track, 
-                                         measurements_curr=points_curr)
-    #------Retriangulation------
-
-    #------Update map------
-    map = vo.updateMapApp(map, points_prev_app, points_curr_app, R, t, T_i=T_i, assoc=assoc2d)
-    #------Update map------
-
-    # #------PICP------
-    assoc_3d = data.association3d_with_similarity(map, points_curr_app, camera)
-    picp_app(map, points_curr, camera, assoc_3d, i)
-    #------PICP------
-
-    for id, point in points_curr:
-        vo.add_point_to_frame(points_track=points_track, frame_id=i+1, point_id=id, point=point)
-
-    
+#------Main functions------
 
 def process_frame(i, map):
     print(f"From frame {i} to {i+1} (total iter: {args.iter})")
+    #Generate path for the frames
     path_frame_prev = u.generate_path(i)
     path_frame_curr = u.generate_path(i+1)
 
+    #Extract dict for prev and curr frames 
     data_frame_prev = u.extract_measurements(path_frame_prev)
     data_frame_curr = u.extract_measurements(path_frame_curr)
 
+    #Process the frame and update the pose
     process_data_for_frame_app(i, map, data_frame_prev=data_frame_prev, data_frame_curr=data_frame_curr)
-
-    
 
 def main():
     print("From frame 0 to 1")
+    #Generate path for the first and second frame
     path_frame0 = u.generate_path(0)
     path_frame1 = u.generate_path(1)
 
+    #Extract dict for frame 0 and 1
     data_frame0 = u.extract_measurements(path_frame0)
     data_frame1 = u.extract_measurements(path_frame1)
 
+    #Points, data association
     p0, p1, points_frame0_app, points_frame1_app, assoc = data.data_association_with_similarity(data_frame0, data_frame1)
 
     points_frame0 = [(id, point) for id, point, _ in points_frame0_app]
@@ -248,6 +244,7 @@ def main():
     app = [(app) for _, _, app in points_frame1_app]
 
 
+    #Add on dict to track the points (multiview triangulation)
     for id, point in points_frame0:
         vo.add_point_to_frame(points_track=points_track, frame_id=0, point_id=id, point=point)
     
@@ -256,8 +253,8 @@ def main():
 
 
     #----------Complete VO-----------
-    #Good rotation and translation is consistent to the movement (forward)
-    
+
+    #Compute E and extract the pose
     R, t = data.compute_pose(points_frame0, points_frame1, K=K)
     T1_est = u.m2T(R,t)
 
@@ -287,41 +284,49 @@ def main():
     pose_for_track.append(np.eye(4)) 
     pose_for_track.append(T1_est)
 
+    #Absolute pose and align with world frame
     T_abs_est = camera.absolutePose().copy()
     T_abs_est = u.alignWithWorldFrame(T_abs_est)
     T_abs_est = np.round(T_abs_est, decimals=1)
     T_abs_est[np.abs(T_abs_est) < 1e-1] = 0
 
+    #Absolute pose (gt) 
     T1_gt = np.round(T1_gt, decimals=1)
     T1_gt[np.abs(T1_gt) < 1e-1] = 0
 
+    #Relative pose and align with world frame
     T_rel_est = camera.relativePose().copy()
     T_rel_est = u.alignWithWorldFrame(T_rel_est)
     T_rel_est = np.round(T_rel_est, decimals=1)
     T_rel_est[np.abs(T_rel_est) < 1e-1] = 0
 
-    print(f"[main]T_abs_est:\n {T_abs_est}")
-    print(f"[main]T_abs_gt:\n {T1_gt}")
-    print(f"[main]T_rel_est:\n {T_rel_est}")
-    print(f"[main]T_rel_gt:\n {T_rel_gt}")
+    #------Print------
+    # print(f"[main]T_abs_est:\n {T_abs_est}")
+    # print(f"[main]T_abs_gt:\n {T1_gt}")
+    # print(f"[main]T_rel_est:\n {T_rel_est}")
+    # print(f"[main]T_rel_gt:\n {T_rel_gt}")
+    #------Print------
 
 
     iter = args.iter
+
+    #Clamp iter
     if(iter > 120):
         iter = 120
     for i in range(1, iter):
         #update the pose of the camera from frame i to i+1
         process_frame(i, map)
 
-
+    #Compute the ration between poses
     ratio = test.evaluate(est_pose, gt_pose)
+    #Scale the poses
     scale_est = test.scale_est_poses(est_pose=est_pose, scale_ratio=ratio)
 
     if(args.plot):
+        #Plot the gt and est poses
         test.plot(gt_pose, scale_est)
 
-
-
+#------Main functions------
 
 
 if __name__ == '__main__':
