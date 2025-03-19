@@ -215,9 +215,15 @@ def data_association_with_similarity(first_data, second_data):
     points_second = []
     assoc = []
 
+    already_assigned = set()
+    already_assigned_first = set()
+
     for i in range(len(point_id_first_data)):
         act_first = actual_id_first_data[i]
         app_first = appearance_first_data[i]
+
+        # if act_first in already_assigned_first:
+        #     continue
         
         best_match_act = None
         best_sim = -1 
@@ -228,6 +234,10 @@ def data_association_with_similarity(first_data, second_data):
         for j in range(len(point_id_second_data)):
             act_second = actual_id_second_data[j]
             app_second = appearance_second_data[j]
+
+            # if(act_second in already_assigned):
+            #     continue
+
             sim = compute_similarity(app_first, app_second)
 
             if(sim > best_sim):
@@ -241,8 +251,10 @@ def data_association_with_similarity(first_data, second_data):
             xfirst, yfirst = coord_x_first[i], coord_y_first[i]
             points_first.append((act_first, (xfirst, yfirst), app_first))
             points_second.append((best_match_act, (best_x_second, best_y_second), best_app))
-            assoc.append((act_first, best_match_act))
+            assoc.append((best_match_act, act_first))
 
+            already_assigned.add(best_match_act)
+            already_assigned_first.add(act_first)
                 
     p0 = [item[1] for item in points_first]
     p1 = [item[1] for item in points_second]
@@ -355,7 +367,6 @@ def association3d_with_similarity(map_points, points_frame_curr, camera):
     Return: 
         association vector without multiple association
     """
-    from scipy.spatial.distance import cosine
 
     def compute_similarity(appearance_first, appearance_second):
         appearance_first = list(map(float, appearance_first))

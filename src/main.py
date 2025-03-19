@@ -141,11 +141,11 @@ def picp_app(map, points_curr, camera, assoc_3d, i):
     est_pose.append(T_abs_est)
     
     #------For printing------
-    print(f"[process_frame]T_abs_est:\n {T_abs_est}")
-    print(f"[process_frame]T_abs_gt:\n {T_abs_gt}")    
-    print(f"[process_frame]T_rel_est:\n {T_rel_est}")
-    print(f"[process_frame]T_rel_gt:\n {T_rel_gt}")
-    #------For printing------  
+    # print(f"[process_frame]T_abs_est:\n {T_abs_est}")
+    # print(f"[process_frame]T_abs_gt:\n {T_abs_gt}")    
+    # print(f"[process_frame]T_rel_est:\n {T_rel_est}")
+    # print(f"[process_frame]T_rel_gt:\n {T_rel_gt}")
+    # #------For printing------  
 
 def process_data_for_frame(i, map, data_frame_prev, data_frame_curr):
     points_prev, points_curr = data.getMeasurementsFromDataFrame(data_frame_prev, data_frame_curr)
@@ -181,6 +181,20 @@ def process_data_for_frame_app(i, map, data_frame_prev, data_frame_curr):
     _, _, points_prev_app, points_curr_app, assoc2d = data.data_association_with_similarity(data_frame_prev, data_frame_curr)
 
     points_curr = [(id, point) for id, point, _ in points_curr_app]
+    
+    id_prev = [id for id, _, _ in points_prev_app]
+    id_curr = [id for id, _, _ in points_curr_app]
+    
+    # from collections import Counter
+    
+    # count_dict = Counter(id_prev)
+    # duplicates = {key: value for key, value in count_dict.items() if value > 1}
+    # print("[Prev]Duplicates and their counts:", duplicates)
+
+    # count_dict = Counter(id_curr)
+    # duplicates = {key: value for key, value in count_dict.items() if value > 1}
+    # print("[Curr]Duplicates and their counts:", duplicates)
+
     
     T_i = camera.absolutePose().copy()
     T_rel_est = camera.relativePose().copy()
@@ -300,11 +314,11 @@ def main():
         process_frame(i, map)
 
 
-    #ratio = test.evaluate(est_pose, gt_pose)
-    #scale_est = test.scale_est_poses(est_pose=est_pose, scale_ratio=ratio)
+    ratio = test.evaluate(est_pose, gt_pose)
+    scale_est = test.scale_est_poses(est_pose=est_pose, scale_ratio=ratio)
 
     if(args.plot):
-        test.plot(gt_pose, est_pose)
+        test.plot(gt_pose, scale_est)
 
 
 

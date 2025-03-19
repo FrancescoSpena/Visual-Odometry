@@ -185,16 +185,21 @@ def updateMapApp(map, measurements_prev, measurements_curr, R, t, T_i, assoc):
     id_map = [item[0] for item in map]
     id_curr = [item[0] for item in measurements_curr]
 
+
     #ID of the new no-mapped points in the curr frame
     missing = [item for item in id_curr if item not in set(id_map)]
+    missing = list(set(missing)) 
 
-    if(len(missing) != 0):
+    #print(f"[updateMapApp]len of missing: {len(missing)}")
+
+    if(missing is not None and len(missing) != 0):
         prev_points = []
         curr_points = []
         assoc_missing = []
         app_missing = []
 
         for id_miss in missing:
+            #print(f"[updateMappApp]id in missing: {id_miss}")
             id = u.getId(assoc, str(id_miss))
 
             if(id is not None):
@@ -208,6 +213,11 @@ def updateMapApp(map, measurements_prev, measurements_curr, R, t, T_i, assoc):
                     app_missing.append(app)
                     assoc_missing.append((id, id_miss))
 
+        # print(f"len of prev_points: {len(prev_points)}")
+        # print(f"len of curr_points: {len(curr_points)}")
+        # print(f"len of app_missing: {len(app_missing)}")
+        # print(f"len of assoc_miss: {len(assoc_missing)}")
+
 
         prev_points = np.array(prev_points, dtype=np.float32)
         curr_points = np.array(curr_points, dtype=np.float32)
@@ -217,7 +227,7 @@ def updateMapApp(map, measurements_prev, measurements_curr, R, t, T_i, assoc):
                                               points2=curr_points, K=K, assoc=assoc_missing,
                                               app_curr_frame=app_missing)
         
-        if(len(missing_map) != 0):
+        if(missing_map is not None and len(missing_map) != 0):
             transformed_map = []
             T_i_inv = np.linalg.inv(T_i)
 
@@ -260,6 +270,7 @@ def retriangulation_n_views_app(map, est_pose, track, measurements_curr):
     id_map = [item[0] for item in map]
     id_curr = [item[0] for item in measurements_curr]
     already_in_map = [item for item in id_curr if item in set(id_map)]
+    already_in_map = list(set(already_in_map))
 
     if(len(already_in_map) != 0):
         #Retriangulation of the point with multi view and update the map with the new points
