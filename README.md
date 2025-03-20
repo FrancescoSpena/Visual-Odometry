@@ -17,7 +17,7 @@ Ensure you have the following installed:
 Clone the repository:
 ```sh
 $ git clone https://github.com/FrancescoSpena/Visual-Odometry/
-$ cd Visual-Odometry/
+$ cd Visual-Odometry/src/
 ```
 
 ### Usage
